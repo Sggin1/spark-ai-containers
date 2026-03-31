@@ -1,4 +1,4 @@
-# mamba-ssm for DGX Spark (aarch64)
+# mamba-ssm for DGX Spark (aarch64) — Early Results
 
 Working mamba-ssm + causal-conv1d container for DGX Spark. Enables loading NemotronH hybrid models (Mamba-2 + Attention) via transformers on aarch64.
 
@@ -80,15 +80,34 @@ Key flags:
 
 ## Tested Models
 
-| Model | Params | Status |
-|-------|:------:|:------:|
-| NVIDIA-Nemotron-Nano-12B-v2-VL-BF16 | 13.2B | Loads on GPU |
+| Model | Params | from_pretrained | generate() | Notes |
+|-------|:------:|:---------------:|:----------:|-------|
+| NVIDIA-Nemotron-Nano-12B-v2-VL-BF16 | 13.2B | Yes | Not tested | Weights loaded, CUDA extensions verified |
+
+**What's been verified:**
+- CUDA extensions compile and import (`selective_scan_cuda`, `causal_conv1d_cuda`)
+- Model loads to GPU via `AutoModelForCausalLM.from_pretrained()`
+- Weight extraction works (used for KV projection analysis in [turboquant](../turboquant/))
+
+**What has NOT been verified:**
+- `model.generate()` end-to-end inference
+- Text-only NemotronH variants
+- Nemotron-3-Nano-30B (served via vLLM in a separate container, not tested here)
 
 ## Caveats
 
 - **Build from source required.** The upstream PyPI packages don't work on aarch64 + PyTorch 2.10+. This may change in future releases.
 - **Vision model dependencies.** The VL variant needs `timm` and `open_clip_torch`. Text-only NemotronH models may need fewer dependencies.
 - **Build time.** Compiling CUDA extensions takes ~15 minutes. Pre-built images avoid this.
+- **Container CUDA version.** The base container uses CUDA 13.0, while the DGX Spark host runs CUDA 13.2. This hasn't caused issues but is worth noting.
+
+## Known Limitations & Next Steps
+
+- **No generation test.** `model.generate()` has not been run. Model loading and CUDA extension import are verified, but end-to-end inference is untested.
+- **Unpinned source builds.** Both mamba-ssm and causal-conv1d build from `main` branch with no pinned commit. A future breaking change upstream could break the build. Consider pinning once a known-good commit is identified.
+- **Single model tested.** Only Nemotron-Nano-12B-v2-VL-BF16 has been loaded. Other NemotronH models (text-only 12B, 30B) need testing.
+- **No performance numbers.** Load time, memory usage, and generation throughput have not been measured in this container.
+- **No comparison to vLLM path.** For serving, vLLM handles mamba-ssm internally. This container is for direct transformers access and research — the two paths haven't been compared.
 
 ## References
 
