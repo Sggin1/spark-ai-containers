@@ -1,4 +1,4 @@
-# TurboQuant KV Cache Compression on DGX Spark
+# TurboQuant KV Cache Compression on DGX Spark — Early Results
 
 TurboQuant 3-bit KV cache compression for Nemotron-3-Nano-30B-A3B-NVFP4 on DGX Spark, patched into vLLM via [PR #38479](https://github.com/vllm-project/vllm/pull/38479).
 
@@ -16,7 +16,7 @@ This is an early test of TurboQuant on SM121 hardware. The PR is unmerged and th
 | Syllogism (Whiskers) | logic | PASS |
 | Secret code recall | needle-in-haystack | PASS |
 | List 5 colors numbered | instruction | PASS |
-| is_prime function | code | PASS* |
+| is_prime function | code | FAIL* |
 | DGX Spark summary | summarization | PASS |
 
 7/8 pass. *Code test hit token limit during model reasoning, not a quality issue.
@@ -51,7 +51,7 @@ Secret code placed at token 0, filler padding to target length, recall question 
 | 192K | 123,474 | 3.0 | 68 GB | FAIL* |
 | 240K | 154,332 | 1.8 | 64 GB | PASS |
 
-5/7 pass. *Failures are non-systematic — model passes at both shorter and longer contexts around these points, suggesting sensitivity to filler-to-signal ratio rather than compression artifact. Memory flat at 64-70 GB.
+5/7 pass. *Failures at 64K and 192K are non-systematic — model passes at both shorter and longer contexts around these points. FP8 baseline needle test at these depths has not been run yet, so these may be model behavior or TQ3 artifact. Needs investigation. Memory flat at 64-70 GB.
 
 ### TQ3 vs FP8 Head-to-Head
 
@@ -67,7 +67,7 @@ Same hardware, same model, same gpu_memory_utilization (0.45), same context dept
 | 96K | 3.5 | 3.0 | 54 GB | 90 GB |
 | 120K | 3.9 | 2.3 | 54 GB | 90 GB |
 
-*FP8 short-context numbers affected by first-request warmup.
+*FP8 1K/4K numbers are first-request warmup, not steady-state. Needs re-run with warmup request for fair comparison.
 
 TQ3 is faster at most context lengths and uses 35 GB less memory. At 64K+, TQ3 wins by 50-70% on throughput because 3-bit KV means less data moved through memory bandwidth per attention step — the decompress overhead is less than the bandwidth savings.
 
@@ -181,7 +181,6 @@ See the [DGX Spark memory guide](../benchmarks/memory_guide.md) for details on m
 - **Triton fallback only.** The PR includes fused CUDA kernels that aren't compiled for SM121 in this build. Throughput would improve with native kernels.
 - **Unofficial TurboQuant implementation.** Google has not released official code. The vLLM PR and `turboquant-torch` are community implementations based on the [paper](https://arxiv.org/abs/2504.19874).
 - **Tested on one model.** Nemotron-3-Nano-30B-A3B-NVFP4 only. Other models may behave differently.
-- **FP8 warmup.** The FP8 baseline shows low throughput at short context due to first-request warmup, not a steady-state measurement. A fairer comparison would use warmed-up numbers for both.
 
 ## Files
 
@@ -191,6 +190,14 @@ See the [DGX Spark memory guide](../benchmarks/memory_guide.md) for details on m
 | `patch_vllm.py` | Applies PR #38479 patches to vLLM |
 | `patches/pr_38479.diff` | Raw PR diff |
 | `new_files/` | New TurboQuant source files from the PR |
+
+## Known Limitations & Next Steps
+
+- **FP8 baseline incomplete.** Throughput comparison exists but needle-in-haystack has not been run on FP8 at matching context depths (64K, 192K). Needed to determine if 256K needle failures are model behavior or TQ3 artifact.
+- **FP8 short-context warmup.** The 1K/4K FP8 throughput numbers (2.3/3.2 tok/s) reflect first-request warmup, not steady-state. Needs re-run with warmup request for fair comparison.
+- **Single model tested.** Results are from Nemotron-3-Nano-30B only. Other architectures (pure transformer, different GQA ratios) may behave differently.
+- **Triton fallback only.** Fused CUDA kernels from PR #38479 not yet compiled for SM121. Throughput has room to improve with native kernels.
+- **TQ4 not tested.** 4-bit mode (`--kv-cache-dtype tq4`) is available but not benchmarked yet — may offer a better quality/speed tradeoff.
 
 ## References
 
