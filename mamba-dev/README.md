@@ -35,16 +35,23 @@ docker run --runtime=nvidia --gpus all -it \
 ### Test
 
 ```python
-from transformers import AutoModelForCausalLM
+from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 
+model_id = "nvidia/NVIDIA-Nemotron-Nano-12B-v2-VL-BF16"
+tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
 model = AutoModelForCausalLM.from_pretrained(
-    "nvidia/NVIDIA-Nemotron-Nano-12B-v2-VL-BF16",
+    model_id,
     trust_remote_code=True,
-    torch_dtype=torch.bfloat16,
+    dtype=torch.bfloat16,
     device_map="cuda",
 )
-# NemotronH_Nano_VL_V2, 13.2B params, cuda:0
+
+inputs = tokenizer("What is the capital of France? Answer in one word:", return_tensors="pt").to("cuda")
+with torch.no_grad():
+    outputs = model.generate(**inputs, max_new_tokens=10, do_sample=False)
+print(tokenizer.decode(outputs[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True))
+# Paris
 ```
 
 ## Manual Install (without Docker)
@@ -82,17 +89,47 @@ Key flags:
 
 | Model | Params | from_pretrained | generate() | Notes |
 |-------|:------:|:---------------:|:----------:|-------|
-| NVIDIA-Nemotron-Nano-12B-v2-VL-BF16 | 13.2B | Yes | Not tested | Weights loaded, CUDA extensions verified |
+| NVIDIA-Nemotron-Nano-12B-v2-VL-BF16 | 13.2B | Yes | Yes | BF16, ~7 tok/s steady state |
 
 **What's been verified:**
-- CUDA extensions compile and import (`selective_scan_cuda`, `causal_conv1d_cuda`)
-- Model loads to GPU via `AutoModelForCausalLM.from_pretrained()`
+- CUDA extensions compile and import (`selective_scan_cuda`, `causal_conv1d_cuda`, mamba-ssm 2.3.1)
+- Model loads to GPU via `AutoModelForCausalLM.from_pretrained()` (13.2B params, 7 shards)
+- `model.generate()` produces correct outputs (see results below)
 - Weight extraction works (used for KV projection analysis in [turboquant](../turboquant/))
 
 **What has NOT been verified:**
-- `model.generate()` end-to-end inference
 - Text-only NemotronH variants
 - Nemotron-3-Nano-30B (served via vLLM in a separate container, not tested here)
+
+## Results
+
+### Build Observations
+
+| Metric | Value |
+|--------|:-----:|
+| Build time | ~12 min |
+| Memory during build | ~12 GB init → ~30 GB spike (CUDA compilation) → ~7-8 GB settled |
+| mamba-ssm version | 2.3.1 |
+| causal-conv1d | compiled from main branch |
+
+### Model Loading
+
+| Metric | Value |
+|--------|:-----:|
+| Download time | ~3 min (25 GB, 7 shards) |
+| Load to GPU | ~6 min (374s) |
+| Parameters | 13.2B |
+| Architecture | NemotronH (55 Mamba-2 + 7 Attention layers) |
+
+### Generation Quality
+
+| Test | Tokens | tok/s | Result |
+|------|:------:|:-----:|--------|
+| factual ("capital of France") | 3 | 0.2* | **PASS** — "Paris" |
+| math (17 * 24) | 6 | 8.1 | **PASS** — "408" |
+| code (is_prime) | 100 | 7.1 | **PASS** — correct description, hit token limit |
+
+*First request warmup — same pattern observed in vLLM serving.
 
 ## Caveats
 
@@ -103,11 +140,13 @@ Key flags:
 
 ## Known Limitations & Next Steps
 
-- **No generation test.** `model.generate()` has not been run. Model loading and CUDA extension import are verified, but end-to-end inference is untested.
+- **Slow throughput needs investigation.** Steady-state generation is ~7-8 tok/s via direct transformers, compared to ~50 tok/s for the same model family via vLLM (NVFP4 quantized, Marlin backend). Possible causes: BF16 vs NVFP4 (2x model size in memory), no KV cache optimization, no batched prefill, no CUDA graphs, transformers' generate() overhead. Needs profiling to identify the bottleneck.
+- **First-request warmup.** First generate() call runs at ~0.2 tok/s (15.6s for 3 tokens). Subsequent calls reach 7-8 tok/s. This matches vLLM behavior and is likely CUDA kernel warmup, not a mamba-ssm issue.
 - **Unpinned source builds.** Both mamba-ssm and causal-conv1d build from `main` branch with no pinned commit. A future breaking change upstream could break the build. Consider pinning once a known-good commit is identified.
 - **Single model tested.** Only Nemotron-Nano-12B-v2-VL-BF16 has been loaded. Other NemotronH models (text-only 12B, 30B) need testing.
-- **No performance numbers.** Load time, memory usage, and generation throughput have not been measured in this container.
-- **No comparison to vLLM path.** For serving, vLLM handles mamba-ssm internally. This container is for direct transformers access and research — the two paths haven't been compared.
+- **Build memory spike.** CUDA extension compilation spikes to ~30 GB during build. Not an issue on the 128 GB Spark, but would matter on smaller systems.
+- **No comparison to vLLM path.** For serving, vLLM handles mamba-ssm internally with optimized kernels. This container is for direct transformers access and research — a fair throughput comparison would need the same model format (BF16) on both paths.
+- **Deprecation warning.** `torch_dtype` parameter is deprecated in transformers 5.x — use `dtype` instead.
 
 ## References
 
@@ -117,4 +156,4 @@ Key flags:
 
 ---
 
-*Tested March 31, 2026 — DGX Spark GB10, nvcr.io/nvidia/pytorch:25.11-py3, CUDA 13.0, PyTorch 2.10*
+*Build tested March 31, 2026 — DGX Spark GB10, nvcr.io/nvidia/pytorch:25.11-py3, CUDA 13.0 (container), PyTorch 2.10, mamba-ssm 2.3.1*
