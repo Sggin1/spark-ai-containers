@@ -1,4 +1,4 @@
-# Nemotron-3-Nano-30B NVFP4 on DGX Spark: From 120 GB to 32 GB — A Complete Guide
+# Nemotron-3-Nano-30B NVFP4 on DGX Spark: From 120 GB to 32 GB — A Guide (Early Results)
 
 **TL;DR:** We got a 19 GB NVFP4 model running in **32 GB total memory at 50 tok/s** on DGX Spark, down from the 50-120 GB that vLLM typically uses. The key: **Marlin backend + enforce_eager + gpu_memory_utilization 0.2**.
 
@@ -157,7 +157,7 @@ As of March 2026, **NVFP4 is not natively accelerated on SM121**. The Marlin bac
 
 Community thread with 3400+ views: [PSA: State of FP4/NVFP4 Support for DGX Spark in VLLM](https://forums.developer.nvidia.com/t/psa-state-of-fp4-nvfp4-support-for-dgx-spark-in-vllm/353069)
 
-## SGLang Alternative
+## SGLang Alternative (Not Tested)
 
 NVIDIA's own cookbook supports Nemotron-3-Nano NVFP4 on SGLang:
 
@@ -169,31 +169,33 @@ python3 -m sglang.launch_server \
     --trust-remote-code
 ```
 
-NVIDIA claims ≥20 GB VRAM. Requires nightly SGLang for SM121 support.
+NVIDIA claims ≥20 GB VRAM. Requires nightly SGLang for SM121 support. This has **not been tested** on our hardware — included for reference only.
 
 ## Tips for DGX Spark Users
 
 1. **Flush buffer caches** before starting inference: `sudo sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'` — unified memory means Linux buffer cache competes with GPU memory
 2. **Disable GUI** for headless servers: `sudo systemctl set-default multi-user.target` (saves 2-3 GB)
 3. **System tuning**: `vm.swappiness=1`, `vm.dirty_bytes=268435456`
-4. **fastsafetensors caveat**: Don't use with `gpu_memory_utilization > 0.76` on unified memory — risk of system freeze
+4. **fastsafetensors caveat**: Don't use with `gpu_memory_utilization > 0.76` on unified memory — observed brief system freeze during testing
 5. **Use eugr's prebuilt wheels** — eliminates FlashInfer JIT compilation spike entirely
 6. **Monitor memory with `/proc/meminfo`** — `nvidia-smi` doesn't report memory usage on GB10 unified memory
 
-## Files in This Repository
+## Files
 
 | File | Description |
 |------|-------------|
-| `COMMUNITY_POST.md` | This document |
-| `INTERNET_RESEARCH.md` | Comprehensive internet research findings |
-| `RESEARCH_STATUS.md` | Original research status and problem statement |
-| `FLASHINFER_JIT_ISSUE.md` | FlashInfer JIT compilation analysis |
-| `BENCHMARK_RESULTS.md` | Full benchmark results with memory safety guide |
-| `benchmark.py` | Benchmark tool (vLLM + Ollama) |
-| `mem_monitor.py` | Memory monitoring script for DGX Spark |
-| `test_all_paths.py` | Automated test runner for all configurations |
-| `run_tests.sh` | Shell-based Docker test runner |
-| `test_outputs/` | Raw test results (JSON + logs) |
+| `README.md` | This document |
+
+Supporting research, benchmark scripts, and raw test outputs are in the local project and may be published in a future update.
+
+## Known Limitations & Next Steps
+
+- **Memory creep is real.** During testing, memory climbed to ~117 GB before we caught it. Without `--enforce-eager`, torch.compile and CUDA graph capture can cause unbounded memory growth on unified memory systems. Always monitor with `/proc/meminfo` and consider setting `--gpu-memory-utilization` conservatively.
+- **System freeze observed.** A brief web UI freeze occurred during high-memory testing with `fastsafetensors` at elevated `gpu_memory_utilization`. DGX Spark's unified memory means GPU over-allocation directly starves the OS. No permanent damage, but reinforces the need for memory safeguards.
+- **Single-user only.** All benchmarks are single-user (`--max-num-seqs 1`). Multi-user serving would need higher `gpu_memory_utilization` and different KV cache sizing — not tested.
+- **SGLang not tested.** The SGLang configuration is from NVIDIA's cookbook, not verified on our hardware.
+- **SM121 native FP4 still pending.** The Marlin backend works via FP4→BF16 dequantization, not native tensor cores. PRs are open (CUTLASS #3038, vLLM #35947, #38126) but none merged as of this writing.
+- **Comparison context.** Ollama achieves similar throughput (49 tok/s) at lower memory (26 GB). The vLLM path trades slightly higher memory for OpenAI-compatible API, longer context support, and extensibility (e.g., TurboQuant KV cache — see [turboquant](../turboquant/)).
 
 ## Acknowledgments
 
