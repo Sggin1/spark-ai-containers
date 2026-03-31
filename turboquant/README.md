@@ -173,7 +173,7 @@ curl http://localhost:8000/v1/chat/completions \
 | `--max-model-len` | Max context. Model supports up to 262144 |
 | `VLLM_NVFP4_GEMM_BACKEND=marlin` | Bypasses broken CUTLASS FP4 kernels on SM121 |
 
-See the [DGX Spark memory guide](../benchmarks/memory_guide.md) for details on memory creep causes and solutions.
+See the [NVFP4 guide](../nvfp4-guide/) for details on memory creep causes and solutions.
 
 ## Caveats
 
