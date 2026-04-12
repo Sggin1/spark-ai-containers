@@ -1,0 +1,39 @@
+# nemotron_super.modelfile — Ollama Modelfile for Nemotron-3-Super 120B
+# Tuned for agentic/reasoning use on DGX Spark (GB10, 128GB)
+#
+# Usage:
+#   ollama create nemotron-3-super-custom -f nemotron_super.modelfile
+#   ollama run nemotron-3-super-custom
+
+FROM nemotron-3-super:120b-a12b-q4_K_M
+
+# Sampling params per Unsloth/NVIDIA official guidance
+PARAMETER temperature 1.0
+PARAMETER top_p 0.95
+PARAMETER repeat_penalty 1.0
+PARAMETER num_predict 4096
+PARAMETER num_ctx 262144
+PARAMETER num_gpu 99
+
+# System prompt for agentic/reasoning use
+SYSTEM """You are an expert AI assistant with deep reasoning capabilities. When solving problems:
+
+1. Think step-by-step, breaking complex problems into manageable parts
+2. Show your reasoning process clearly
+3. When writing code, include explanations and handle edge cases
+4. For math problems, verify your answer with a different approach when possible
+5. Be precise and cite specific details when explaining concepts
+
+You have strong capabilities in coding, mathematics, scientific reasoning, and general knowledge. Use them to provide thorough, accurate responses."""
+
+# Chat template with reasoning mode support
+# Note: The base model's chat template handles <think> blocks natively.
+# To enable extended thinking, prefix your prompt with:
+#   "Enable deep thinking subroutine.\n\n"
+# The model will wrap its reasoning in <think>...</think> tags.
+TEMPLATE """{{- if .System }}<|im_start|>system
+{{ .System }}<|im_end|>
+{{ end }}{{- range .Messages }}<|im_start|>{{ .Role }}
+{{ .Content }}<|im_end|>
+{{ end }}<|im_start|>assistant
+"""

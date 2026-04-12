@@ -30,6 +30,29 @@ Working mamba-ssm + causal-conv1d build for DGX Spark. `pip install mamba-ssm` f
 - Loads NemotronH hybrid models (Mamba-2 + Attention) via transformers
 - Tested with Nemotron-Nano-12B-v2-VL-BF16 (13.2B params on GPU)
 
+### 4. [nvfp4-landscape/](nvfp4-landscape/) — NVFP4 on DGX Spark: Landscape Snapshot (March 2026)
+
+Literature synthesis of community findings, tracked PRs, and the SM121 FP4 kernel situation as of March 26, 2026. Aggregates forum threads, vLLM docs, and NVIDIA cookbook links into a single reference.
+
+- Why CUTLASS FP4 falls back on SM121 (no `tcgen05`)
+- Tracked PRs: CUTLASS #3038, vLLM #35947 / #38126, Flash-Attention #2222
+- Memory component breakdown: 50–120 GB default → ~25 GB with minimal flags
+
+### 5. [nvfp4-memory/](nvfp4-memory/) — NVFP4 Memory Footprint (supporting data)
+
+Flag-by-flag memory snapshot for Nemotron-3-Nano-30B-A3B-NVFP4 on vLLM 0.18.1rc1. Deeper cut supporting `nvfp4-guide/` — raw research notes, FlashInfer JIT analysis, earlier forum draft.
+
+- Config table: 117 GB default → 32 GB with Marlin + `--enforce-eager` + util 0.2
+- `research_status.md`, `flashinfer_jit.md`, `benchmarks.md` as supporting files
+
+### 6. [nemo3-super-gguf/](nemo3-super-gguf/) — Nemotron-3-Super 120B via sm_121 llama.cpp
+
+Native sm_121 llama.cpp build for Nemotron-3-Super 120B MoE. GGUF path documented because the NVFP4 checkpoint was blocked on vLLM — NemotronH LatentMoE uses relu² with separate projections and no fused `act_and_mul` MoE backend supports it.
+
+- ~17 tok/s at Q4_K (66 GB weights, ~71 GB runtime)
+- Ollama GGUF not compatible with upstream llama.cpp (different MoE tensor layout)
+- NVFP4 attempt documented: three layers of failure (config, kernel, pip wheels)
+
 ## Hardware
 
 | | |
