@@ -1,4 +1,4 @@
-# spark-ai-containers
+# DGX-SPARK
 
 Docker containers and guides for running AI models on the NVIDIA DGX Spark (GB10, SM121, 128 GB unified memory).
 
