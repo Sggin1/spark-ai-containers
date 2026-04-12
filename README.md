@@ -1,8 +1,8 @@
 # DGX-SPARK
 
-Docker containers and guides for running AI models on the NVIDIA DGX Spark (GB10, SM121, 128 GB unified memory).
+DGX Spark research and tests — containers, benchmarks, and investigation notes for running large models on the NVIDIA DGX Spark (GB10, SM 12.1, 128 GB unified memory).
 
-These address specific compatibility issues with CUDA 13.2, aarch64, and SM121 that aren't covered by upstream containers or documentation.
+Entries address compatibility issues with CUDA 13.x, aarch64, and SM121 that aren't covered by upstream containers or documentation. Each folder is a self-contained topic; dates and environment details live inside each folder's README.
 
 ## Contents
 
