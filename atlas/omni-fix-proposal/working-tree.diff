@@ -1,0 +1,252 @@
+diff --git a/crates/atlas-core/src/config.rs b/crates/atlas-core/src/config.rs
+index 5f58d67..a3725ab 100644
+--- a/crates/atlas-core/src/config.rs
++++ b/crates/atlas-core/src/config.rs
+@@ -250,6 +250,15 @@ pub struct ModelConfig {
+     #[serde(skip)]
+     pub weight_prefix: String,
+ 
++    /// Prefix prepended to `lm_head.weight` for multimodal-wrapper checkpoints
++    /// where the language model lives under an outer namespace (e.g.
++    /// Nemotron-H Omni's `language_model.lm_head.weight`). Empty for plain
++    /// checkpoints, which keep `lm_head.weight` at the safetensors root.
++    /// Distinct from `weight_prefix` because `lm_head` typically sits at the
++    /// language-model root, not at the same level as `backbone.layers.*`.
++    #[serde(skip)]
++    pub lm_head_prefix: String,
++
+     // ── Expert Parallelism (set at runtime, not from config.json) ──
+     #[serde(skip)]
+     pub ep_rank: usize,
+diff --git a/crates/atlas-core/src/config/dispatch.rs b/crates/atlas-core/src/config/dispatch.rs
+index 84237bb..478a3b1 100644
+--- a/crates/atlas-core/src/config/dispatch.rs
++++ b/crates/atlas-core/src/config/dispatch.rs
+@@ -14,6 +14,39 @@ use super::{
+     parse_mistral_params, parse_quantization_config, parse_vision_config, validate_config,
+ };
+ 
++/// Map Nemotron-H field-name aliases onto the Atlas canonical fields and
++/// expand the hybrid layer pattern. Shared between the plain `nemotron_h`
++/// arm and the `NemotronH_Nano_Omni_Reasoning_V3` wrapper arm — both consume
++/// the same inner config schema.
++fn normalize_nemotron_h(config: &mut ModelConfig) {
++    if config.num_experts == 0 && config.n_routed_experts > 0 {
++        config.num_experts = config.n_routed_experts;
++    }
++    if config.rms_norm_eps == default_rms_eps() && config.norm_eps > 0.0 {
++        config.rms_norm_eps = config.norm_eps;
++    }
++    if config.linear_conv_kernel_dim == default_conv_kernel() && config.conv_kernel > 0 {
++        config.linear_conv_kernel_dim = config.conv_kernel;
++    }
++    if config.shared_expert_intermediate_size == 0 && config.moe_shared_expert_intermediate_size > 0
++    {
++        config.shared_expert_intermediate_size = config.moe_shared_expert_intermediate_size;
++    }
++    config.attn_gated = false;
++    if !config.hybrid_override_pattern.is_empty() && config.layer_types.is_empty() {
++        config.layer_types = config
++            .hybrid_override_pattern
++            .chars()
++            .map(|c| match c {
++                'M' => LayerType::LinearAttention,
++                'E' => LayerType::Moe,
++                '*' => LayerType::FullAttention,
++                other => panic!("Unknown hybrid_override_pattern char: '{other}'"),
++            })
++            .collect();
++    }
++}
++
+ pub fn parse_config(json: &str) -> Result<ModelConfig> {
+     // First, probe the top-level model_type.
+     let raw: serde_json::Value =
+@@ -122,37 +155,40 @@ pub fn parse_config(json: &str) -> Result<ModelConfig> {
+         "nemotron_h" => {
+             let mut config: ModelConfig =
+                 serde_json::from_str(json).context("Failed to parse nemotron_h config.json")?;
+-            // Map Nemotron-H field names → Atlas canonical names
+-            if config.num_experts == 0 && config.n_routed_experts > 0 {
+-                config.num_experts = config.n_routed_experts;
+-            }
+-            if config.rms_norm_eps == default_rms_eps() && config.norm_eps > 0.0 {
+-                config.rms_norm_eps = config.norm_eps;
+-            }
+-            if config.linear_conv_kernel_dim == default_conv_kernel() && config.conv_kernel > 0 {
+-                config.linear_conv_kernel_dim = config.conv_kernel;
+-            }
+-            if config.shared_expert_intermediate_size == 0
+-                && config.moe_shared_expert_intermediate_size > 0
+-            {
+-                config.shared_expert_intermediate_size = config.moe_shared_expert_intermediate_size;
+-            }
+-            // Architecture flags
+-            config.attn_gated = false;
++            normalize_nemotron_h(&mut config);
+             config.weight_prefix = "backbone".to_string();
+-            // Parse hybrid_override_pattern → layer_types
+-            if !config.hybrid_override_pattern.is_empty() && config.layer_types.is_empty() {
+-                config.layer_types = config
+-                    .hybrid_override_pattern
+-                    .chars()
+-                    .map(|c| match c {
+-                        'M' => LayerType::LinearAttention,
+-                        'E' => LayerType::Moe,
+-                        '*' => LayerType::FullAttention,
+-                        other => panic!("Unknown hybrid_override_pattern char: '{other}'"),
+-                    })
+-                    .collect();
+-            }
++            finalize_config(&mut config, &raw)?;
++            Ok(config)
++        }
++        // Nemotron-H Omni multimodal wrapper. The text-only LLM lives in
++        // `llm_config` (same schema as plain `nemotron_h`). Vision and
++        // sound encoders are intentionally out of scope for text-only
++        // inference: their tensors stay in the WeightStore unread.
++        //
++        // Top-level `quantization_config` is picked up by `finalize_config`
++        // via `parse_quantization_config(&raw)` — which reads the original
++        // wrapper root, not the lifted llm_config — so no merge is needed.
++        //
++        // TODO(omni-fix): plumb a skip-prefix list through SafetensorsLoader
++        // to avoid loading `vision_model.*` / `sound_encoder.*` / `mlp1.*` /
++        // `sound_projection.*` (~1100 tensors, low-GB memory waste at NVFP4).
++        "NemotronH_Nano_Omni_Reasoning_V3" => {
++            let llm = raw
++                .get("llm_config")
++                .context("Omni wrapper config missing `llm_config`")?
++                .clone();
++            let mut config: ModelConfig = serde_json::from_value(llm)
++                .context("Failed to parse Omni `llm_config` as nemotron_h")?;
++            normalize_nemotron_h(&mut config);
++            // Omni nests the LLM under `language_model.*`. The backbone
++            // hangs off that root; lm_head sits one level up. Both prefixes
++            // are set explicitly: `auto_detect_weight_prefix` would resolve
++            // `weight_prefix` correctly via the `.layers.0.` scan, but the
++            // lm_head loader has no auto-detect path (it does a literal
++            // store lookup).
++            config.weight_prefix = "language_model.backbone".to_string();
++            config.lm_head_prefix = "language_model.".to_string();
++            config.nested_config = true;
+             finalize_config(&mut config, &raw)?;
+             Ok(config)
+         }
+diff --git a/crates/atlas-core/src/config/factory.rs b/crates/atlas-core/src/config/factory.rs
+index 31d1b92..decc2da 100644
+--- a/crates/atlas-core/src/config/factory.rs
++++ b/crates/atlas-core/src/config/factory.rs
+@@ -50,6 +50,7 @@ impl ModelConfig {
+             model_type: "qwen3_next".to_string(),
+             mtp_num_hidden_layers: 1,
+             weight_prefix: String::new(),
++            lm_head_prefix: String::new(),
+             ep_rank: 0,
+             ep_world_size: 1,
+             tp_rank: 0,
+diff --git a/crates/atlas-core/src/config/tests.rs b/crates/atlas-core/src/config/tests.rs
+index 219f4f4..4bc108b 100644
+--- a/crates/atlas-core/src/config/tests.rs
++++ b/crates/atlas-core/src/config/tests.rs
+@@ -257,6 +257,81 @@ fn test_parse_nemotron_h_config() {
+     assert_eq!(cfg.routed_scaling_factor, 2.5);
+ }
+ 
++/// Nemotron-H Omni multimodal wrapper: top-level wraps the text LLM in
++/// `llm_config`, and `quantization_config` lives at the wrapper root (not
++/// inside `llm_config`). The dispatcher must lift `llm_config`, hoist the
++/// quantization block in, and set the language-model-nested weight prefixes
++/// (`language_model.backbone` / `language_model.`) so the existing
++/// nemotron_h weight loader resolves the correct safetensors keys.
++#[test]
++fn test_parse_nemotron_h_omni_wrapper() {
++    let json = r#"{
++        "model_type": "NemotronH_Nano_Omni_Reasoning_V3",
++        "architectures": ["NemotronH_Nano_Omni_Reasoning_V3"],
++        "llm_config": {
++            "model_type": "nemotron_h",
++            "hidden_size": 2688,
++            "num_hidden_layers": 52,
++            "num_attention_heads": 32,
++            "num_key_value_heads": 2,
++            "head_dim": 128,
++            "intermediate_size": 1856,
++            "n_routed_experts": 128,
++            "num_experts_per_tok": 6,
++            "moe_intermediate_size": 1856,
++            "moe_shared_expert_intermediate_size": 3712,
++            "vocab_size": 131072,
++            "tie_word_embeddings": false,
++            "hybrid_override_pattern": "MEMEM*EMEMEM*EMEMEM*EMEMEM*EMEMEM*EMEMEMEM*EMEMEMEME",
++            "mamba_num_heads": 64,
++            "mamba_head_dim": 64,
++            "ssm_state_size": 128,
++            "n_groups": 8,
++            "expand": 2,
++            "conv_kernel": 4,
++            "norm_eps": 1e-5,
++            "rope_theta": 10000,
++            "routed_scaling_factor": 2.5
++        },
++        "quantization_config": {
++            "quant_method": "modelopt",
++            "quant_algo": "NVFP4",
++            "exclude_modules": ["lm_head"]
++        }
++    }"#;
++    let cfg = parse_config(json).unwrap();
++    // Inner LLM model_type passes through so factory.rs dispatches to
++    // the existing NemotronHWeightLoader without a new factory arm.
++    assert_eq!(cfg.model_type, "nemotron_h");
++    // Nemotron-H field-name remappings must still apply through the lift.
++    assert_eq!(cfg.hidden_size, 2688);
++    assert_eq!(cfg.num_hidden_layers, 52);
++    assert_eq!(cfg.num_experts, 128);
++    assert_eq!(cfg.shared_expert_intermediate_size, 3712);
++    assert_eq!(cfg.rms_norm_eps, 1e-5);
++    assert_eq!(cfg.linear_conv_kernel_dim, 4);
++    assert_eq!(cfg.layer_types.len(), 52);
++    assert_eq!(cfg.num_ssm_layers(), 23);
++    assert_eq!(cfg.num_moe_layers(), 23);
++    assert_eq!(cfg.num_attention_layers(), 6);
++    // Multimodal-wrapper-specific assertions.
++    assert_eq!(cfg.weight_prefix, "language_model.backbone");
++    assert_eq!(cfg.lm_head_prefix, "language_model.");
++    assert_eq!(cfg.layer_prefix(3), "language_model.backbone.layers.3");
++    assert!(cfg.nested_config);
++    assert!(!cfg.attn_gated);
++    assert!(!cfg.tie_word_embeddings);
++    // Top-level quantization_config must survive the lift — without it,
++    // QuantFormat dispatch silently falls back to BF16 and the model
++    // serves with mismatched weights.
++    let qc = cfg
++        .quantization_config
++        .as_ref()
++        .expect("top-level quantization_config must be hoisted into the lifted llm_config");
++    assert_eq!(qc.quant_method, "modelopt");
++    assert_eq!(qc.quant_algo, "NVFP4");
++}
++
+ #[test]
+ fn test_expert_parallelism_range() {
+     let mut cfg = ModelConfig::qwen3_next_80b_nvfp4();
+diff --git a/crates/spark-model/src/weight_loader/nemotron.rs b/crates/spark-model/src/weight_loader/nemotron.rs
+index 78caad0..ada350e 100644
+--- a/crates/spark-model/src/weight_loader/nemotron.rs
++++ b/crates/spark-model/src/weight_loader/nemotron.rs
+@@ -368,8 +368,12 @@ impl ModelWeightLoader for NemotronHWeightLoader {
+     }
+ 
+     fn load_lm_head(&self, store: &WeightStore, config: &ModelConfig) -> Result<DenseWeight> {
+-        if store.contains("lm_head.weight") {
+-            dense(store, "lm_head.weight")
++        // Multimodal wrappers (Nemotron-H Omni) put lm_head under
++        // `language_model.lm_head.weight`. `lm_head_prefix` is empty for
++        // plain Nemotron-H checkpoints, restoring the original lookup.
++        let key = format!("{}lm_head.weight", config.lm_head_prefix);
++        if store.contains(&key) {
++            dense(store, &key)
+         } else {
+             self.load_embedding(store, config)
+         }
