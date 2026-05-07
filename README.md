@@ -64,7 +64,7 @@ Native sm_121 llama.cpp build for Nemotron-3-Super 120B MoE. GGUF path documente
 
 ## Status
 
-This is hobbyist work on a single hardware configuration. Results may not generalize to other setups. The TurboQuant container patches an unmerged vLLM PR — the API may change. Sharing what worked in case it helps others with similar hardware.
+This is work on a single hardware configuration mostly. Results may not generalize to other setups. The TurboQuant container patches an unmerged vLLM PR — the API may change. Sharing what worked in case it helps others with similar hardware.
 
 ## Acknowledgments
 
