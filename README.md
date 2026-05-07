@@ -53,6 +53,18 @@ Native sm_121 llama.cpp build for Nemotron-3-Super 120B MoE. GGUF path documente
 - Ollama GGUF not compatible with upstream llama.cpp (different MoE tensor layout)
 - NVFP4 attempt documented: three layers of failure (config, kernel, pip wheels)
 
+### 7. [dual-spark/](dual-spark/) — Pairing two GX10 over a single CX-7 cable (200 Gb/s RDMA)
+
+Field-tested runbook for pairing two NVIDIA DGX Sparks (ASUS Ascent GX10) over a single CX-7 direct-link cable. Addresses the two failure classes that consume the most forum hours: power-induced throttling (consumer UPS sag → P8 clamp → 1/3-spec plateau) and dual-node connection issues (UFW, NCCL TCP-fallback, GID-index, half-bandwidth twin misconfig). Includes a BF16 GEMM TFLOP/s sanity oracle (`gpu_stress.py`) for triage.
+
+- 7-row symptom → fix table at the top of `DUAL_SPARK_SETUP.md`
+- Verified: ~195–197 Gb/s RDMA aggregate (97-98% of theoretical 200 Gb/s)
+- Patches eugr's launcher with NCCL multi-rail + RoCEv2 GID overrides
+
+### 8. [atlas/](atlas/) — Atlas Inference Engine: head-to-head vs vLLM
+
+Single-host benchmark of [Atlas](https://github.com/Avarok-Cybersecurity/atlas), a pure Rust+CUDA inference engine for GB10. Reproduced their published `~88 tok/s` Nemotron-3-Nano-30B-A3B-NVFP4 number (88.34 max, 84.36 median, c=1). Same model, same prompts: Atlas single-stream beats vLLM by +63%, vLLM wins concurrency at c=4 (continuous batching). Atlas cold-start with cached weights: 20s vs vLLM 171s (8.5×). Includes reproducer (`bench.py`), raw JSON results, and the `serve --help` flag dump.
+
 ## Hardware
 
 | | |
@@ -74,7 +86,10 @@ This is work on a single hardware configuration mostly. Results may not generali
 - [turboquant-torch](https://pypi.org/project/turboquant-torch/) — Community PyTorch reimplementation
 - [NVIDIA DGX Spark Playbooks](https://github.com/NVIDIA/dgx-spark-playbooks)
 - The DGX Spark community on NVIDIA Developer Forums
+- [Avarok-Cybersecurity/atlas](https://github.com/Avarok-Cybersecurity/atlas) — Pure Rust+CUDA inference engine, AGPL-3.0
+- Atlas Discord community — collaborative benchmarking + maintainer responsiveness
+- [eugr's spark-vllm-docker networking deep-wiki](https://deepwiki.com/eugr/spark-vllm-docker/7-dgx-spark-networking) — basis for the dual-spark §2 NCCL config
 
 ---
 
-*Tested March 2026 — DGX Spark GB10, SM121, CUDA 13.2, Driver 580.142*
+*Tested March–May 2026 — DGX Spark GB10, SM121, CUDA 13.2, Driver 580.142*
