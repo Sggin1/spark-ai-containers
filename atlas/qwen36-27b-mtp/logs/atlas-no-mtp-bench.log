@@ -1,0 +1,26 @@
+
+=== concurrency=1 ===
+  [short#0] 22tok in 8.054s = 2.73 tok/s (ttft=2658.872649ms)
+  [short#1] 22tok in 8.215s = 2.68 tok/s (ttft=2754.352243ms)
+  [short#2] 27tok in 6.585s = 4.1 tok/s (ttft=312.536024ms)
+  [medium#0] 134tok in 32.31s = 4.15 tok/s (ttft=2484.767922ms)
+  [medium#1] 134tok in 30.563s = 4.38 tok/s (ttft=2365.244971ms)
+  [medium#2] 140tok in 26.526s = 5.28 tok/s (ttft=212.828832ms)
+  [long#0] 641tok in 123.772s = 5.18 tok/s (ttft=2449.969103ms)
+  [long#1] 641tok in 119.42s = 5.37 tok/s (ttft=2263.271498ms)
+  [long#2] 689tok in 123.675s = 5.57 tok/s (ttft=213.249259ms)
+
+=== concurrency=4 ===
+  [short#0 c=4] 17tok / 16.973s = 1.0 tok/s
+  [short#2 c=4] 18tok / 16.972s = 1.06 tok/s
+  [short#1 c=4] 22tok / 21.979s = 1.0 tok/s
+  [medium#2 c=4] 137tok / 100.106s = 1.37 tok/s
+  [medium#0 c=4] 157tok / 117.859s = 1.33 tok/s
+  [medium#1 c=4] 140tok / 102.802s = 1.36 tok/s
+  [long#0] ERROR: timed out
+  [long#1 c=4] 548tok / 300.071s = 1.83 tok/s
+  [long#2] ERROR: timed out
+
+results -> /home/gx10/projects/atlas/runs/qwen36-27b-mtp-2026-05-07/results/atlas-no-mtp/bench.json
+  c=1: median 4.38 tok/s, max 5.57 tok/s, 9 runs in 479.12s wall
+  c=4: median 1.33 tok/s, max 1.83 tok/s, 7 runs in 676.76s wall

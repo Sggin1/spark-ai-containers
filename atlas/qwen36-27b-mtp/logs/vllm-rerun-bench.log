@@ -1,0 +1,26 @@
+
+=== concurrency=1 ===
+  [short#0] 96tok in 76.458s = 1.26 tok/s (ttft=Nonems)
+  [short#1] 96tok in 23.979s = 4.0 tok/s (ttft=Nonems)
+  [short#2] 96tok in 23.91s = 4.02 tok/s (ttft=Nonems)
+  [medium#0] 256tok in 63.991s = 4.0 tok/s (ttft=Nonems)
+  [medium#1] 256tok in 64.235s = 3.99 tok/s (ttft=Nonems)
+  [medium#2] 256tok in 63.787s = 4.01 tok/s (ttft=Nonems)
+  [long#0] 768tok in 191.201s = 4.02 tok/s (ttft=Nonems)
+  [long#1] 768tok in 191.901s = 4.0 tok/s (ttft=Nonems)
+  [long#2] 768tok in 192.108s = 4.0 tok/s (ttft=Nonems)
+
+=== concurrency=4 ===
+  [short#0 c=4] 96tok / 25.073s = 3.83 tok/s
+  [short#1 c=4] 96tok / 25.075s = 3.83 tok/s
+  [short#2 c=4] 96tok / 25.34s = 3.79 tok/s
+  [medium#0 c=4] 256tok / 66.418s = 3.85 tok/s
+  [medium#2 c=4] 256tok / 66.242s = 3.86 tok/s
+  [medium#1 c=4] 256tok / 66.245s = 3.86 tok/s
+  [long#0 c=4] 768tok / 197.421s = 3.89 tok/s
+  [long#1 c=4] 768tok / 197.082s = 3.9 tok/s
+  [long#2 c=4] 768tok / 196.447s = 3.91 tok/s
+
+results -> /home/gx10/projects/atlas/runs/qwen36-27b-mtp-2026-05-07/results/vllm/bench.json
+  c=1: median 4.0 tok/s, max 4.02 tok/s, 9 runs in 891.57s wall
+  c=4: median 3.86 tok/s, max 3.91 tok/s, 9 runs in 865.34s wall
