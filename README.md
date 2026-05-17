@@ -65,6 +65,15 @@ Field-tested runbook for pairing two NVIDIA DGX Sparks (ASUS Ascent GX10) over a
 
 Single-host benchmark of [Atlas](https://github.com/Avarok-Cybersecurity/atlas), a pure Rust+CUDA inference engine for GB10. Reproduced their published `~88 tok/s` Nemotron-3-Nano-30B-A3B-NVFP4 number (88.34 max, 84.36 median, c=1). Same model, same prompts: Atlas single-stream beats vLLM by +63%, vLLM wins concurrency at c=4 (continuous batching). Atlas cold-start with cached weights: 20s vs vLLM 171s (8.5×). Includes reproducer (`bench.py`), raw JSON results, and the `serve --help` flag dump.
 
+### 9. [fp4_investigation/](fp4_investigation/) — FP4 on GB10: silicon vs marketing
+
+Evidence-first probe of what FP4 tensor-core paths actually work on `sm_121a`. NVIDIA's own `ptxas` refuses `tcgen05.mma` for `sm_121a` — the "1 PFLOP FP4" pipe is a silicon gap on GB10, not a software switch. Consumer warp-level FP4 (`mma.sync.aligned.kind::mxf4.block_scale...`) compiles cleanly and emits the same SASS opcode (`OMMA.SF.16864.F32.E2M1.E2M1.E8`) as the RTX 5060 Ti (`sm_120a`) — Spark and the 5060 Ti share the consumer-Blackwell FP4 silicon at the instruction level.
+
+- `findings.md` — full evidence trail with PTX/SASS citations
+- `kernel-patterns.md` — patterns for integrating custom low-bit formats with consumer-Blackwell FP4, distilled from llama.cpp MMQ
+- `reference/fp4_mma_reference.cu` — working MXFP4/NVFP4 inline-PTX MMA, compiles cleanly on sm_120a + sm_121a
+- CuTeDSL 4.5.1+ now supports `sm_121a` as a first-class JIT target (earlier 4.4.x "missing kernel images" reports no longer apply)
+
 ## Hardware
 
 | | |
