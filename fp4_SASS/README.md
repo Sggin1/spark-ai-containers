@@ -49,6 +49,10 @@ The "1 PFLOP FP4" performance claim associated with DGX Spark / GB10 has produce
 
 This repo collects the empirical evidence in one place so people don't have to rederive it independently.
 
+## See also
+
+- **Sibling: [`../comfyui_spark_notes/`](../comfyui_spark_notes/)** — practical wheel-shadowing gotchas observed while running ComfyUI on Spark. Cites the SASS-equivalence finding here as the basis for the `sm_120` rebuild target on `sm_121` silicon.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

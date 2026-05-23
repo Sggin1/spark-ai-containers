@@ -74,6 +74,15 @@ Evidence-first probe of what FP4 tensor-core paths actually work on `sm_121a`. N
 - `reference/fp4_mma_reference.cu` — working MXFP4/NVFP4 inline-PTX MMA, compiles cleanly on sm_120a + sm_121a
 - CuTeDSL 4.5.1+ now supports `sm_121a` as a first-class JIT target (earlier 4.4.x "missing kernel images" reports no longer apply)
 
+### 10. [comfyui_spark_notes/](comfyui_spark_notes/) — ComfyUI wheel-shadowing gotchas on Spark
+
+Two real pip-shadowing risks observed while running ComfyUI on Spark with the [Triplany/comfyui-dgx-spark](https://github.com/Triplany/comfyui-dgx-spark) kit applied: PyPI's `onnxruntime` silently overwrites Jay0515's `sm_121` GPU wheel (same `top_level` import path, different distribution names, no pip conflict detection), and `pip install sageattention` overwrites the local rebuild against current torch/CUDA.
+
+- Shadowing mechanism traced to shared `top_level.txt` declaration across distinct distributions
+- `get_available_providers()` is the reliable detector — startup-log GPU-discovery warnings are misleading
+- Both findings verified against a live ComfyUI install on 2026-05-22
+- Cross-references `fp4_SASS/` for the sm_120 / sm_121 SASS-equivalence basis behind the `sm_120` rebuild target
+
 ## Hardware
 
 | | |
