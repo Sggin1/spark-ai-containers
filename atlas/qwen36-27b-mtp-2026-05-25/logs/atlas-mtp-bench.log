@@ -1,0 +1,28 @@
+
+=== concurrency=1 ===
+  [short#0] 10tok in 1.091s = 9.17 tok/s (ttft=634.79369ms inv=no_token_ids)
+  [short#1] 10tok in 0.688s = 14.53 tok/s (ttft=98.46001ms inv=no_token_ids)
+  [short#2] 10tok in 0.633s = 15.8 tok/s (ttft=102.552851ms inv=no_token_ids)
+  [medium#0] 224tok in 11.389s = 19.67 tok/s (ttft=617.9724530000001ms inv=no_token_ids)
+  [medium#1] 188tok in 9.938s = 18.92 tok/s (ttft=636.319918ms inv=no_token_ids)
+  [medium#2] 188tok in 9.796s = 19.19 tok/s (ttft=101.61384ms inv=no_token_ids)
+  [long#0] 659tok in 34.643s = 19.02 tok/s (ttft=636.976944ms inv=no_token_ids)
+  [long#1] 659tok in 34.349s = 19.19 tok/s (ttft=643.3982550000001ms inv=no_token_ids)
+  [long#2] 717tok in 37.273s = 19.24 tok/s (ttft=91.790556ms inv=no_token_ids)
+
+=== concurrency=4 ===
+  [short#0 c=4] 2tok / 0.179s = 11.15 tok/s inv=no_token_ids
+  [short#2 c=4] 18tok / 7.769s = 2.32 tok/s inv=no_token_ids
+  [short#1 c=4] 17tok / 8.075s = 2.11 tok/s inv=no_token_ids
+  [medium#1 c=4] 180tok / 56.014s = 3.21 tok/s inv=no_token_ids
+  [medium#2 c=4] 163tok / 50.364s = 3.24 tok/s inv=no_token_ids
+  [medium#0 c=4] 209tok / 65.281s = 3.2 tok/s inv=no_token_ids
+  [long#0 c=4] 662tok / 207.366s = 3.19 tok/s inv=no_token_ids
+  [long#2 c=4] 662tok / 179.68s = 3.68 tok/s inv=no_token_ids
+  [long#1 c=4] 703tok / 183.397s = 3.83 tok/s inv=no_token_ids
+
+results -> /home/gx10/projects/AI/atlas/runs/qwen36-27b-mtp-2026-05-25/results/atlas-mtp/bench.json
+  c=1: median 19.02 tok/s, max 19.67 tok/s, 9 runs in 139.8s wall
+        invariant: ok=0 violation=0 no_token_ids=9 (of 9)
+  c=4: median 3.21 tok/s, max 11.15 tok/s, 9 runs in 758.12s wall
+        invariant: ok=0 violation=0 no_token_ids=9 (of 9)

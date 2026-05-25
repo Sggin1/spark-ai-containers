@@ -1,0 +1,28 @@
+
+=== concurrency=1 ===
+  [short#0] 96tok in 31.689s = 3.03 tok/s (ttft=Nonems inv=ok)
+  [short#1] 96tok in 13.091s = 7.33 tok/s (ttft=Nonems inv=ok)
+  [short#2] 96tok in 13.197s = 7.27 tok/s (ttft=Nonems inv=ok)
+  [medium#0] 256tok in 34.767s = 7.36 tok/s (ttft=Nonems inv=ok)
+  [medium#1] 256tok in 34.849s = 7.35 tok/s (ttft=Nonems inv=ok)
+  [medium#2] 256tok in 34.856s = 7.34 tok/s (ttft=Nonems inv=ok)
+  [long#0] 768tok in 104.802s = 7.33 tok/s (ttft=Nonems inv=ok)
+  [long#1] 768tok in 103.908s = 7.39 tok/s (ttft=Nonems inv=ok)
+  [long#2] 768tok in 105.226s = 7.3 tok/s (ttft=Nonems inv=ok)
+
+=== concurrency=4 ===
+  [short#2 c=4] 96tok / 13.44s = 7.14 tok/s inv=ok
+  [short#0 c=4] 96tok / 13.441s = 7.14 tok/s inv=ok
+  [short#1 c=4] 96tok / 13.575s = 7.07 tok/s inv=ok
+  [medium#0 c=4] 256tok / 35.533s = 7.2 tok/s inv=ok
+  [medium#2 c=4] 256tok / 35.455s = 7.22 tok/s inv=ok
+  [medium#1 c=4] 256tok / 35.456s = 7.22 tok/s inv=ok
+  [long#0 c=4] 768tok / 105.649s = 7.27 tok/s inv=ok
+  [long#1 c=4] 768tok / 105.192s = 7.3 tok/s inv=ok
+  [long#2 c=4] 768tok / 105.037s = 7.31 tok/s inv=ok
+
+results -> /home/gx10/projects/AI/atlas/runs/qwen36-27b-mtp-2026-05-25/results/vllm/bench.json
+  c=1: median 7.33 tok/s, max 7.39 tok/s, 9 runs in 476.38s wall
+        invariant: ok=9 violation=0 no_token_ids=0 (of 9)
+  c=4: median 7.22 tok/s, max 7.31 tok/s, 9 runs in 462.78s wall
+        invariant: ok=9 violation=0 no_token_ids=0 (of 9)
