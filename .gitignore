@@ -1,0 +1,29 @@
+# Private working notes — never publish
+PRIVATE/
+discord-post.md
+Discord*.md
+*-private.md
+private-*.md
+
+# Process / scratch state
+*.pid
+run.log
+scratch/
+draft-*.md
+
+# Secrets — always
+.env
+.env.*
+*.key
+*.pem
+*.token
+*HF_TOKEN*
+*OPENAI_KEY*
+*ANTHROPIC_KEY*
+secrets/
+
+# OS / editor noise
+.DS_Store
+*.swp
+.vscode/
+.idea/
