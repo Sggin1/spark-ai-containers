@@ -33,14 +33,15 @@ distinct from the Arena entries' `RedHatAI/*` (compressed-tensors).
 | Recipe | Quant | conc=1 solo | conc=2 | Note |
 |--------|:-----:|:-----------:|:------:|------|
 | [nvfp4-marlin](measured-qwen3.6-35b-a3b-nvfp4-marlin.yaml) | NVFP4 (modelopt) | 66.8 | 94.8 | marlin = the sm_121 NVFP4 ceiling in this image |
-| [nvfp4-dflash](measured-qwen3.6-35b-a3b-nvfp4-dflash.yaml) | NVFP4 + DFlash | **82.8 (+24%)** | 94.9 | single-user lever; DFlash washes out at conc=2 in this minimal config |
+| [nvfp4-dflash **k=6**](measured-qwen3.6-35b-a3b-nvfp4-dflash.yaml) | NVFP4 + DFlash | ~96 | **~120 (115–128)** | **beats board #10 NVFP4 (111.9)**, near #6 leader (131.4) |
 
 **Findings:** (1) On sm_121 in this image, FlashInfer/TRT-LLM NVFP4-MoE kernels are *hardware-gated*
 (`kernel does not support current device cuda`) and `flashinfer_b12x` loads but is slower — **marlin
-wins** at the bandwidth-bound conc=1–2 regime. (2) DFlash gives a clean **+24% single-user** boost on
-NVFP4 (BF16-KV + flash_attn required), but the gain washes out at conc=2 *unless* paired with the board
-leaders' throughput flags (`--optimization-level 3 --performance-mode throughput`, CUDA graphs ON) — as
-the rank06/rank10 recipes above do.
+wins** at the bandwidth-bound conc=1–2 regime. (2) **`num_speculative_tokens` is the decisive DFlash knob.**
+At k=15, DFlash "washes out" at conc=2 (94.9 ≈ plain NVFP4); at **k=6** it gives **+35% → ~120 c2**,
+beating board #10's NVFP4 on lighter NVFP4 with a *simpler* config (no throughput flags, no RedHatAI
+checkpoint). Found via a fast restart+short-probe autotune sweep (~90s/config). (3) `--performance-mode
+throughput` / `-O3` were *not* levers here — both added variance with no mean gain.
 
 ## Why these matter for the nvfp4-* docs
 

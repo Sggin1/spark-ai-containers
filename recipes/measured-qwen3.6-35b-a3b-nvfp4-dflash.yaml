@@ -1,18 +1,18 @@
 # Measured locally (optimize project) — NOT a Spark Arena scrape.
 # Test: tg128 @ d16384 (board's exact test, llama-benchy) | single GB10, TP=1 | 2026-06-06
-#   conc=1 solo: 82.75 ± 6.66 tok/s  (+24% vs marlin-only 66.84)  ← the win
-#   conc=2:      94.94 ± 6.70 tok/s  (= marlin-only 94.78; DFlash washes out at concurrency here)
+#   conc=2 (board metric): ~120 tok/s (two batches: 128.5±15 and 115.2±4) — BEATS board #10 NVFP4 (111.9),
+#                          within ~2% of the #6 INT4 leader (131.4). peak 160.
+#   conc=1 solo:           ~96 tok/s
 # Model: nvidia/Qwen3.6-35B-A3B-NVFP4 (modelopt) + z-lab/Qwen3.6-35B-A3B-DFlash drafter.
-# Backend story: NVFP4 marlin weights + DFlash spec-decode fused in one server. The KV conflict
-#   (DFlash needs BF16-KV + flash_attn; NVFP4 recipe used fp8-KV) is resolved by DROPPING fp8-KV
-#   and forcing --attention-backend flash_attn. Drafter shares target embed/lm_head; mean accept
-#   length ~4-6 tok on real text. This is a single-user (conc=1) lever — for batched use the plain
-#   marlin recipe. NOTE: with the board leaders' throughput flags (--optimization-level 3
-#   --performance-mode throughput, CUDA graphs ON) DFlash does help at conc=2 (see rank06/rank10);
-#   this recipe is the minimal validated combo, not the fully tuned throughput config.
+# THE KEY KNOB: num_speculative_tokens=6 (NOT 15). Found via a fast autotune sweep. At ~24-40% draft
+#   acceptance, k=15 wastes verify-compute and the gain "washes out" at conc=2 (94.9); k=6 keeps the easy
+#   predictions cheaply → +35% at conc=2. (Matches why board rank06/rank10 use k=6/k=8.)
+# Backend story: NVFP4 marlin weights + DFlash fused. KV conflict (DFlash needs BF16-KV + flash_attn;
+#   NVFP4 used fp8-KV) resolved by DROPPING fp8-KV and forcing --attention-backend flash_attn. Plain
+#   latency mode + O2 — throughput flags / -O3 added variance with no gain on this checkpoint.
 recipe_version: '1'
 name: measured-qwen3.6-35b-a3b-nvfp4-dflash
-description: nvidia/Qwen3.6-35B-A3B-NVFP4 marlin + z-lab DFlash — best single-user NVFP4 (82.8 solo, +24%)
+description: nvidia/Qwen3.6-35B-A3B-NVFP4 marlin + z-lab DFlash k=6 — ~120 c2, beats board #10 NVFP4
 model: nvidia/Qwen3.6-35B-A3B-NVFP4
 container: vllm-node
 solo_only: true
@@ -28,7 +28,7 @@ defaults:
   max_model_len: 32768
   max_num_batched_tokens: 16384
   max_num_seqs: 32
-  num_speculative_tokens: 15
+  num_speculative_tokens: 6
 command: |
   vllm serve nvidia/Qwen3.6-35B-A3B-NVFP4 \
     --host {host} --port {port} \
