@@ -24,6 +24,26 @@ concurrencies re-rank the table — treat these as *a* slice, not an absolute or
 | [13](rank13-nemotron-3-nano-30b-a3b-nvfp4.yaml) | nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4 | NVFP4 (modelopt) | 104.74 | **official** `vllm/vllm-openai:v0.20.0-aarch64-cu130-ubuntu2404` | **FlashInfer MoE FP4 = 1** |
 | [22](rank22-nemotron-3-nano-omni-30b-a3b-nvfp4.yaml) | nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4 | NVFP4 (multimodal) | 84.67 | **official** `vllm/vllm-openai:v0.20.0-aarch64-cu130-ubuntu2404` | **Marlin** (`--moe-backend marlin`, FP4 MoE = 0) |
 
+## Measured locally (optimize project, single GB10) — not Arena scrapes
+
+These two are *our own* benchmarks on this box (vLLM v0.22.1rc1.dev124, TP=1, same `tg128 @ d16384`
+test), added from the [optimize](../../optimize/) deep-dive. They use `nvidia/*` NVFP4 (modelopt),
+distinct from the Arena entries' `RedHatAI/*` (compressed-tensors).
+
+| Recipe | Quant | conc=1 solo | conc=2 | Note |
+|--------|:-----:|:-----------:|:------:|------|
+| [nvfp4-marlin](measured-qwen3.6-35b-a3b-nvfp4-marlin.yaml) | NVFP4 (modelopt) | 66.8 | 94.8 | marlin = the sm_121 NVFP4 ceiling in this image |
+| [nvfp4-dflash **k=8**](measured-qwen3.6-35b-a3b-nvfp4-dflash.yaml) | NVFP4 + DFlash | 85.8 | **112.5** (full matrix) | **edges board #10 NVFP4 (111.9)**; #6 model now 404 |
+
+**Findings:** (1) On sm_121 in this image, FlashInfer/TRT-LLM NVFP4-MoE kernels are *hardware-gated*
+(`kernel does not support current device cuda`) and `flashinfer_b12x` loads but is slower — **marlin
+wins** at the bandwidth-bound conc=1–2 regime. (2) **`num_speculative_tokens` is the decisive DFlash knob.**
+At k=15, DFlash "washes out" at conc=2 (94.9 ≈ plain NVFP4); at **k≈6–8** it lifts the rank cell to **112.5
+(full official matrix)**, edging board #10's NVFP4 — on lighter NVFP4 with a *simpler* config (no throughput
+flags, no RedHatAI checkpoint). Found via a fast restart+short-probe autotune sweep. (3) `--performance-mode
+throughput` / `-O3` were *not* levers here. (Isolated single-cell runs read ~121–123; the full 28-cell matrix
+— the submission methodology — settles ~112.5. Use the matrix number.) See [`../TUNING.md`](../TUNING.md).
+
 ## Why these matter for the nvfp4-* docs
 
 Rank #13 is the **exact model the docs were built around**, so it's a direct before/after:

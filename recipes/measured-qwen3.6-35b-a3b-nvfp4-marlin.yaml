@@ -1,0 +1,40 @@
+# Measured locally (optimize project) — NOT a Spark Arena scrape.
+# Test: tg128 @ d16384 (board's exact test, llama-benchy) | single GB10, TP=1 | 2026-06-06
+#   conc=2: 94.78 ± 3.61 tok/s   ·   conc=1 solo: 66.84 ± 0.64 tok/s
+# Model: nvidia/Qwen3.6-35B-A3B-NVFP4 (modelopt format)
+# Backend story: marlin is the NVFP4 ceiling on sm_121 in this image (vLLM v0.22.1rc1.dev124).
+#   `--moe-backend auto` falls through every FlashInfer backend → marlin; flashinfer_trtllm/cutlass
+#   are HARDWARE-GATED on sm_121 ("kernel does not support current device cuda"); flashinfer_b12x
+#   loads + correct but SLOWER (84 c2) — at ~3B active params, conc=1–2 is bandwidth-bound where
+#   marlin's weight-only GEMM wins. Reaching board #10's 111.9 needs a cu130-nightly/newer-flashinfer
+#   image where the cutlass/trtllm NVFP4-MoE kernel is built for sm_121. See PR #40082.
+recipe_version: '1'
+name: measured-qwen3.6-35b-a3b-nvfp4-marlin
+description: nvidia/Qwen3.6-35B-A3B-NVFP4, marlin MoE — best batched single-GB10 NVFP4 (94.8 c2)
+model: nvidia/Qwen3.6-35B-A3B-NVFP4
+container: vllm-node
+solo_only: true
+mods:
+  - mods/fix-qwen3.6-chat-template
+env:
+  VLLM_NVFP4_GEMM_BACKEND: marlin
+  VLLM_TEST_FORCE_FP8_MARLIN: '0'
+defaults:
+  port: 8000
+  host: 0.0.0.0
+  gpu_memory_utilization: 0.8
+  max_model_len: 32768
+  max_num_batched_tokens: 16384
+  max_num_seqs: 32
+command: |
+  vllm serve nvidia/Qwen3.6-35B-A3B-NVFP4 \
+    --host {host} --port {port} \
+    --max-model-len {max_model_len} \
+    --max-num-batched-tokens {max_num_batched_tokens} \
+    --max-num-seqs {max_num_seqs} \
+    --gpu-memory-utilization {gpu_memory_utilization} \
+    --moe-backend marlin \
+    --kv-cache-dtype fp8 \
+    --load-format fastsafetensors \
+    --enable-prefix-caching \
+    --trust-remote-code

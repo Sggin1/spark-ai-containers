@@ -1,0 +1,43 @@
+# Measured locally (optimize project) — NOT a Spark Arena scrape.
+# FULL official matrix (llama-benchy depths 0..100000 × conc 1,2,5,10, --enable-prefix-caching),
+# single GB10, TP=1, 2026-06-06. Submission-grade numbers (full 28-cell run = the board methodology):
+#   tg128 @ d16384 c2 (RANK CELL): 112.5 ± 6  — edges board #10 NVFP4 (111.9)
+#   strongest cell: d16384 c5 = 154 ; d0 c10 = 254. Full grid: optimize/results/submit_matrix_k8.md
+#   (isolated single-cell runs read ~121-123 fresh-cache; full matrix settles ~112.5 — use the matrix number)
+# Model: nvidia/Qwen3.6-35B-A3B-NVFP4 (modelopt) + z-lab/Qwen3.6-35B-A3B-DFlash drafter.
+# THE KEY KNOB: num_speculative_tokens=8 (k6/k8 tie; k8 matches board #6). NOT the default 15 — at ~24-40%
+#   accept, k=15 wastes verify-compute and "washes out" at conc=2 (94.9). Found via a fast autotune k-sweep.
+# Backend: NVFP4 marlin + DFlash. KV conflict (DFlash needs BF16-KV + flash_attn; NVFP4 used fp8-KV) resolved
+#   by dropping fp8-KV + forcing flash_attn. max-model-len 131072 to cover the official depth sweep to 100000.
+recipe_version: '1'
+name: measured-qwen3.6-35b-a3b-nvfp4-dflash
+description: nvidia/Qwen3.6-35B-A3B-NVFP4 marlin + z-lab DFlash k=8 — 112.5 c2 (full matrix), edges board #10 NVFP4
+model: nvidia/Qwen3.6-35B-A3B-NVFP4
+container: vllm-node
+solo_only: true
+mods:
+  - mods/fix-qwen3.6-chat-template
+env:
+  VLLM_NVFP4_GEMM_BACKEND: marlin
+  VLLM_TEST_FORCE_FP8_MARLIN: '0'
+defaults:
+  port: 8000
+  host: 0.0.0.0
+  gpu_memory_utilization: 0.8
+  max_model_len: 131072
+  max_num_batched_tokens: 16384
+  max_num_seqs: 32
+  num_speculative_tokens: 8
+command: |
+  vllm serve nvidia/Qwen3.6-35B-A3B-NVFP4 \
+    --host {host} --port {port} \
+    --max-model-len {max_model_len} \
+    --max-num-batched-tokens {max_num_batched_tokens} \
+    --max-num-seqs {max_num_seqs} \
+    --gpu-memory-utilization {gpu_memory_utilization} \
+    --moe-backend marlin \
+    --attention-backend flash_attn \
+    --load-format fastsafetensors \
+    --enable-prefix-caching \
+    --trust-remote-code \
+    --speculative-config '{{"method":"dflash","model":"z-lab/Qwen3.6-35B-A3B-DFlash","num_speculative_tokens":{num_speculative_tokens}}}'
