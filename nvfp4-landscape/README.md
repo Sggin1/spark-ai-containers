@@ -1,5 +1,7 @@
 # NVFP4 on DGX Spark: Landscape Snapshot
 
+> **⚠️ UPDATED 2026-06-05 — facts below are partly superseded.** This snapshot dates to **March 26 2026**, the week the sm_121 NVFP4 fixes landed. Since then: stock upstream **vLLM ≥ v0.19.0 (now v0.22.x) builds working sm_121 NVFP4 kernels — no eugr fork needed**; a **native SM120/121 CUTLASS NVFP4 GEMM** landed (vLLM PR #40082, merged 2026-05-20); the `VLLM_NVFP4_GEMM_BACKEND` / `VLLM_USE_FLASHINFER_MOE_FP4` env vars are **deprecated** (still functional, emit FutureWarning; replaced by `--linear-backend` / `--moe-backend`) and backend choice is now **per-model** — in current top recipes text Nemotron NVFP4 enables FlashInfer MoE while multimodal Omni still pins Marlin; **llama.cpp NVFP4 is now GPU-accelerated**. The memory-tuning findings (KV pre-allocation, `--enforce-eager`, util 0.2) still hold. Wrong/dangerous facts are corrected in place below; full diff in [`NVFP4_UPDATE_PLAN.md`](../NVFP4_UPDATE_PLAN.md). Current host baseline: **Driver 580.159.03 · CUDA 13.0.2** (DGX OS 7.5.0).
+
 **Snapshot:** March 26, 2026 · CUDA 13.0 · Driver 580.142
 **System:** NVIDIA DGX Spark (GB10, sm_121, 128 GB unified memory)
 **Context:** Trying to run Nemotron-3-Nano-30B-A3B-NVFP4 (19 GB) in ~25 GB total memory instead of 50–120 GB
@@ -48,9 +50,10 @@ The FlashInfer CUTLASS FP4 backend generates `cvt with .e2m1x2` PTX instructions
 | PR | Description | Status |
 |----|-------------|--------|
 | CUTLASS #3038 | SM121-gated MXFP4 kernel wiring for MoE | In review |
-| vLLM #35947 | Software E2M1 conversion for SM12x NVFP4 activation | Merged |
+| vLLM #37725 | Preserve CUDA arch suffix (a/f) for SM12x — fixes NVFP4 NaN (supersedes #35947, which was **closed unmerged**) | Merged 2026-03-25 |
+| vLLM #40082 | Native SM120/121 CUTLASS NVFP4 GEMM + opt-in b12x warp-level kernel | Merged 2026-05-20 |
 | vLLM #38126 | SM12x architecture suffix preservation (fixes NaN) | Merged |
-| Flash-Attention #2222 | SM12x support without tcgen05 | In progress |
+| Flash-Attention #2329/#2330/#2333 | SM120 fwd/bwd/varlen (Blackwell GeForce / DGX Spark) | Merged 2026-03-12/13 (draft #2222 closed unmerged) |
 
 **No timeline from NVIDIA for native sm_121 tcgen05 FP4 support.**
 
@@ -258,7 +261,7 @@ model = AutoModelForCausalLM.from_pretrained(
 
 ### What we hit
 
-1. **ModelOpt format loading fails in transformers** — `KeyError: 'weight_scale'` (huggingface/transformers#44292). The compressed-tensors decompression path does not handle ModelOpt's format.
+1. **ModelOpt format loading fails in transformers** — `KeyError: 'weight_scale'` (huggingface/transformers#44292). The compressed-tensors decompression path does not handle ModelOpt's format. *(UPDATE June 2026: issue #44292 closed 2026-04-05, redirected toward the compressed-tensors path; serving frameworks — vLLM/SGLang — remain the supported route for NVFP4, direct transformers loading was not the fix.)*
 
 2. **Without TorchAO**: `from_pretrained()` silently dequantizes FP4→BF16, inflating memory to ~60 GB.
 
@@ -290,11 +293,13 @@ Source: [HuggingFace Transformers Issue #44292](https://github.com/huggingface/t
 
 Safetensors (5 shards, ~19.4 GB): FP4 (E2M1) weights + FP8 per-group scales (1 per 16 values) + FP32 per-tensor scales. Two-level scaling is what differentiates NVFP4 from MXFP4.
 
+> **UPDATE June 2026 — NVFP4 ships in two on-disk formats.** The above is the **ModelOpt** layout (`nvidia/*` checkpoints, served with `--quantization modelopt_fp4` / `fp4`). Newer NVFP4 checkpoints (e.g. `RedHatAI/Qwen3.6-35B-A3B-NVFP4`) ship as **compressed-tensors** (`weight_packed` / `weight_scale` / `weight_scale_2`), served with `--quantization compressed-tensors`. Same NVFP4 numerics, different container + load flag — the docs below cover only the ModelOpt path.
+
 ### Format Conversion Options
 
 | Target | Possible? | Status |
 |--------|:---------:|--------|
-| GGUF (llama.cpp) | YES | PR #19769 merged March 2026, but **CPU only, no GPU backend** |
+| GGUF (llama.cpp) | YES | #19769 merged; **UPDATE June 2026: GPU NVFP4 now works on sm_120/121** (CUDA dp4a + native Blackwell FP4; PRs #20644/#22196, also SYCL/Vulkan). "CPU-only" was snapshot-era. Still a requantize, not a transcode. |
 | GPTQ | NO | Different algorithm, requires BF16 source |
 | AWQ | NO | Different algorithm, requires BF16 source |
 | MXFP4 | NO | Different scaling scheme |
@@ -325,7 +330,7 @@ NVFP4 ModelOpt checkpoints target NVIDIA's serving stack (vLLM, SGLang, TRT-LLM)
 2. Flushing buffer cache (`sudo sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'`) — unified memory means Linux buffer cache competes with GPU memory
 3. System tuning used: `vm.swappiness=1`, `vm.dirty_bytes=268435456`
 4. fastsafetensors with `gpu_memory_utilization > 0.76` caused system freezes on unified memory per forum reports
-5. Driver 590 required for some newer NVFP4 models (fixes CUDA illegal instruction)
+5. ⚠️ **CORRECTION (June 2026):** Driver 590 is **NOT** validated on DGX OS and has **bricked Spark units** — stay on **580.159.03** (DGX OS 7.5.0 / CUDA 13.0.2). The NVFP4 "CUDA illegal instruction" crashes are framework-level bugs (vLLM #35519, #38208, #37431; TRT-LLM #12230 — all open as of June 2026), mitigated with eager mode / disabling CUDA graphs, not a driver bump.
 6. FlashInfer race condition causing silent memory corruption at high concurrency reported — forum authors used `flashinfer_cudnn` or Marlin
 
 ### eugr/spark-vllm-docker (Updated March 25, 2026)

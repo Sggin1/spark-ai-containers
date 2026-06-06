@@ -1,5 +1,7 @@
 # Nemotron-3-Nano-30B NVFP4 on DGX Spark: Range from 120 GB to 32 GB — what happened?
 
+> **⚠️ UPDATED 2026-06-05 — duplicate/superseded draft.** This is a near-verbatim earlier draft of [`../nvfp4-guide/README.md`](../nvfp4-guide/README.md); the plan recommends deleting it. Same June-2026 corrections apply: stock vLLM ≥ v0.19 needs no eugr fork, native CUTLASS NVFP4 GEMM landed (PR #40082), env vars deprecated for `--linear-backend`/`--moe-backend`, llama.cpp NVFP4 now GPU-accelerated. Full diff in [`NVFP4_UPDATE_PLAN.md`](../NVFP4_UPDATE_PLAN.md).
+
 **TL;DR:** A 19 GB NVFP4 model ran in 32 GB total memory at 50 tok/s on DGX Spark, down from 50-120 GB at vLLM defaults. Flag combination: Marlin backend + enforce_eager + gpu_memory_utilization 0.2.
 
 ---
@@ -152,7 +154,7 @@ All tests on DGX Spark (GB10, sm_121), Nemotron-3-Nano-30B-A3B-NVFP4 (19 GB mode
 As of March 2026, NVFP4 is not natively accelerated on SM121. The Marlin backend dequantizes FP4→BF16 at runtime; not using native FP4 tensor cores. Active PRs:
 
 - CUTLASS #3038: SM121-gated MXFP4 kernel wiring
-- vLLM #35947: Software E2M1 conversion for SM12x
+- vLLM #37725: CUDA arch-suffix preservation for SM12x (merged 2026-03-25; supersedes #35947, which was closed unmerged)
 - vLLM #38126: Architecture suffix preservation
 
 Community thread with 3400+ views: [PSA: State of FP4/NVFP4 Support for DGX Spark in VLLM](https://forums.developer.nvidia.com/t/psa-state-of-fp4-nvfp4-support-for-dgx-spark-in-vllm/353069)

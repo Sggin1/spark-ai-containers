@@ -1,0 +1,48 @@
+# Spark Arena leaderboard rank #13 — captured 2026-06-05
+# Test: tg128 @ d16384, concurrency 2 | 104.74 tok/s | single GB10
+# Model: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4  (NVFP4)
+# Source: https://spark-arena.com/leaderboard (recipeType: spark-vllm-docker)
+# NOTE: this is the SAME model the ../nvfp4-* docs are built around. Compare to the
+#       March-2026 recipe there: this one ENABLES FlashInfer MoE FP4 (=1), runs the
+#       OFFICIAL upstream vLLM aarch64 image (no eugr fork), util 0.8, no --enforce-eager,
+#       no Marlin forcing. It inverts the docs' "force Marlin / disable FlashInfer" recipe.
+recipe_version: '1'
+solo_only: true
+command: |
+  vllm serve nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4 \
+    --served-model-name nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4 nemotron-3-nano \
+    --tensor-parallel-size {tensor_parallel} \
+    --port {port} --host {host} \
+    --max-model-len {max_model_len} \
+    --max-num-seqs {max_num_seqs} \
+    --max-num-batched-tokens {max_num_batched_tokens} \
+    --gpu-memory-utilization {gpu_memory_utilization} \
+    --attention-backend flashinfer \
+    --kv-cache-dtype fp8 \
+    --enable-prefix-caching \
+    --reasoning-parser-plugin nano_v3_reasoning_parser.py \
+    --reasoning-parser nano_v3 \
+    --enable-auto-tool-choice \
+    --tool-call-parser qwen3_coder \
+    --trust-remote-code
+env:
+  OMP_NUM_THREADS: '4'
+  CUDA_MANAGED_FORCE_DEVICE_ALLOC: '1'
+  PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+  VLLM_FLASHINFER_MOE_BACKEND: throughput
+  VLLM_USE_FLASHINFER_MOE_FP4: '1'
+defaults:
+  max_num_seqs: 20
+  tensor_parallel: 1
+  max_num_batched_tokens: 32768
+  port: 8000
+  max_model_len: 262144
+  gpu_memory_utilization: 0.8
+  host: 0.0.0.0
+mods:
+  - mods/nemotron-nano
+name: Nemotron-3-Nano-NVFP4-FlashInfer
+container: vllm/vllm-openai:v0.20.0-aarch64-cu130-ubuntu2404
+model: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4
+description: vLLM serving Nemotron-3-Nano-30B-A3B-NVFP4 on a single GB10
+cluster_only: false

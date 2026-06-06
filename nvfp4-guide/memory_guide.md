@@ -1,5 +1,7 @@
 # DGX Spark Memory Issues — Root Causes and Solutions
 
+> **⚠️ UPDATED 2026-06-05.** This taxonomy (creep / KV over-provisioning / startup spike) still holds, but two config details are stale: the `VLLM_NVFP4_GEMM_BACKEND` / `VLLM_USE_FLASHINFER_MOE_FP4` env vars are now **deprecated** (still functional, emit FutureWarning; replaced by `--linear-backend` / `--moe-backend`; backend is per-model, not a blanket force-Marlin), and the **eugr fork is no longer required** — stock upstream vLLM ≥ v0.19 (official cu130 image) builds working sm_121 NVFP4 kernels. Full diff in [`NVFP4_UPDATE_PLAN.md`](../NVFP4_UPDATE_PLAN.md).
+
 Three distinct memory problems, often confused. Each has a different cause and fix.
 
 ## Issue 1: Memory CREEP (progressive growth over time)

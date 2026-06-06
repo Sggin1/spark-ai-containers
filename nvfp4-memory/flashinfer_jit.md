@@ -1,5 +1,7 @@
 # FlashInfer JIT Compilation Issue on DGX Spark (sm_121)
 
+> **⚠️ UPDATED 2026-06-05.** The JIT-spike analysis and persistent-cache workaround below are still valid for older NGC containers, but reliance on this workaround is reduced: the **official upstream vLLM cu130 image now ships working sm_121 NVFP4 kernels**, and NGC has advanced past the 25.12/26.01 images cited here. Full diff in [`NVFP4_UPDATE_PLAN.md`](../NVFP4_UPDATE_PLAN.md).
+
 ## Problem
 
 The NVIDIA vLLM containers (`nvcr.io/nvidia/vllm:25.12.post1-py3` and `26.01-py3`) do not ship

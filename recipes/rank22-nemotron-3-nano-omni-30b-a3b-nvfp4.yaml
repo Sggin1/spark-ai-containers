@@ -1,0 +1,56 @@
+# Spark Arena leaderboard rank #22 — captured 2026-06-05
+# Test: tg128 @ d16384, concurrency 2 | 84.67 tok/s | single GB10
+# Model: nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4  (NVFP4, multimodal: video/image/audio)
+# Source: https://spark-arena.com/leaderboard (recipeType: spark-vllm-docker)
+# NOTE: Counterpoint to rank #13 — the Omni (multimodal) sibling STILL uses the Marlin
+#       path (--moe-backend marlin, VLLM_USE_FLASHINFER_MOE_FP4=0, VLLM_NVFP4_GEMM_BACKEND=marlin)
+#       even though it runs on the OFFICIAL upstream vLLM image. Takeaway: backend choice
+#       is now PER-MODEL, not a blanket "always force Marlin" — FlashInfer MoE FP4 works for
+#       text Nemotron-Nano but the Omni path is still pinned to Marlin here.
+solo_only: true
+mods:
+  - mods/nemotron-omni
+container: vllm/vllm-openai:v0.20.0-aarch64-cu130-ubuntu2404
+command: |
+  vllm serve nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4 \
+    --served-model-name nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4 nemotron-3-nano-omni \
+    --tensor-parallel-size {tensor_parallel} \
+    --port {port} --host {host} \
+    --max-model-len {max_model_len} \
+    --max-num-seqs {max_num_seqs} \
+    --max-num-batched-tokens {max_num_batched_tokens} \
+    --gpu-memory-utilization {gpu_memory_utilization} \
+    --quantization fp4 \
+    --moe-backend marlin \
+    --kv-cache-dtype fp8 \
+    --mamba-ssm-cache-dtype float32 \
+    --enable-prefix-caching \
+    --reasoning-parser nemotron_v3 \
+    --enable-auto-tool-choice \
+    --tool-call-parser qwen3_coder \
+    --video-pruning-rate 0.5 \
+    --limit-mm-per-prompt '{{"video":1,"image":1,"audio":1}}' \
+    --media-io-kwargs '{{"video":{{"fps":2,"num_frames":256}}}}' \
+    --allowed-local-media-path / \
+    --trust-remote-code
+model: nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4
+env:
+  VLLM_MARLIN_USE_ATOMIC_ADD: '1'
+  VLLM_NVFP4_GEMM_BACKEND: marlin
+  OMP_NUM_THREADS: '4'
+  CUDA_MANAGED_FORCE_DEVICE_ALLOC: '1'
+  PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+  VLLM_ALLOW_LONG_MAX_MODEL_LEN: '1'
+  VLLM_USE_FLASHINFER_MOE_FP4: '0'
+defaults:
+  max_model_len: 131072
+  host: 0.0.0.0
+  port: 8000
+  max_num_batched_tokens: 32768
+  tensor_parallel: 1
+  gpu_memory_utilization: 0.8
+  max_num_seqs: 8
+recipe_version: '1'
+cluster_only: false
+name: Nemotron-3-Nano-Omni-NVFP4
+description: vLLM serving Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4 on a single GB10

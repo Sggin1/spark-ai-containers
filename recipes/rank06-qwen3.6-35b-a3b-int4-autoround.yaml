@@ -1,0 +1,48 @@
+# Spark Arena leaderboard rank #6 — captured 2026-06-05
+# Test: tg128 @ d16384, concurrency 2 | 131.36 tok/s | single GB10
+# Model: Intel/Qwen3.6-35B-A3B-int4-AutoRound  (INT4, loaded via --quantization gptq)
+# Source: https://spark-arena.com/leaderboard (recipeType: spark-vllm-docker)
+# NOTE: Highest-throughput single-node 35B here, and it's INT4 (not NVFP4) — Intel AutoRound
+#       W4 + z-lab DFlash speculative decoding (k=8) is the lever. Included as the top
+#       single-Spark 35B reference point against the NVFP4 entries (#10/#13).
+command: |
+  vllm serve Intel/Qwen3.6-35B-A3B-int4-AutoRound \
+    --host {host} \
+    --port {port} \
+    --language-model-only \
+    --max-model-len {max_model_len} \
+    --max-num-batched-tokens {max_num_batched_tokens} \
+    --max-num-seqs {max_num_seqs} \
+    --gpu-memory-utilization {gpu_memory_utilization} \
+    --load-format fastsafetensors \
+    --attention-backend flash_attn \
+    --enable-prefix-caching \
+    --enable-chunked-prefill \
+    --trust-remote-code \
+    --quantization gptq \
+    --reasoning-parser qwen3 \
+    --enable-auto-tool-choice \
+    --tool-call-parser qwen3_coder \
+    --default-chat-template-kwargs '{{"preserve_thinking":true}}' \
+    --speculative-config '{{"method":"dflash","model":"z-lab/Qwen3.6-35B-A3B-DFlash","num_speculative_tokens":{num_speculative_tokens}}}'
+defaults:
+  gpu_memory_utilization: 0.8
+  host: 0.0.0.0
+  max_num_seqs: 4
+  max_num_batched_tokens: 32768
+  port: 8000
+  num_speculative_tokens: 8
+  max_model_len: 131072
+recipe_version: '1'
+mods:
+  - mods/fix-qwen3.5-autoround
+  - mods/fix-qwen3-coder-next
+solo_only: true
+container: vllm-node
+model: Intel/Qwen3.6-35B-A3B-int4-AutoRound
+cluster_only: false
+env:
+  VLLM_MARLIN_USE_ATOMIC_ADD: '1'
+  HF_HUB_OFFLINE: '1'
+description: Intel AutoRound INT4 target + z-lab/Qwen3.6-35B-A3B-DFlash, k=8, long-context Spark Arena profile
+name: Qwen3.6-35B-A3B-AutoRound-DFlash-k8-solo-spark-arena-long

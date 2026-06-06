@@ -1,0 +1,61 @@
+# Spark Arena leaderboard rank #10 — captured 2026-06-05
+# Test: tg128 @ d16384, concurrency 2 | 111.92 tok/s | single GB10
+# Model: RedHatAI/Qwen3.6-35B-A3B-NVFP4  (NVFP4, compressed-tensors format)
+# Source: https://spark-arena.com/leaderboard (recipeType: spark-vllm-docker)
+# NOTE: NVFP4 ships here as compressed-tensors (--quantization compressed-tensors), NOT
+#       modelopt — the ../nvfp4-* docs only cover the modelopt path. Throughput recipe:
+#       CUDA graphs ON (--optimization-level 3 --performance-mode throughput), util 0.8,
+#       full 262K ctx, DFlash speculative decoding. Official minimal command per HF card is
+#       just: `vllm serve RedHatAI/Qwen3.6-35B-A3B-NVFP4 --reasoning-parser qwen3 --moe_backend flashinfer_cutlass`
+cluster_only: false
+env:
+  VLLM_MARLIN_USE_ATOMIC_ADD: '1'
+  TORCH_MATMUL_PRECISION: high
+  FLASHINFER_DISABLE_VERSION_CHECK: '1'
+  NVIDIA_FORWARD_COMPAT: '1'
+  VLLM_TUNED_CONFIG_FOLDER: /workspace/moe-configs
+  VLLM_HTTP_TIMEOUT_KEEP_ALIVE: '600'
+  VLLM_TEST_FORCE_FP8_MARLIN: '1'
+recipe_version: '1'
+name: RedHatAI/Qwen3.6-35B-A3B-NVFP4
+defaults:
+  max_num_batched_tokens: 32768
+  host: 0.0.0.0
+  gpu_memory_utilization: 0.8
+  max_model_len: 262144
+  max_num_seqs: 8
+  num_speculative_tokens: 6
+  port: 8000
+command: |
+  vllm serve RedHatAI/Qwen3.6-35B-A3B-NVFP4 \
+    --host {host} \
+    --port {port} \
+    --served-model-name qwen3.6-35b \
+    --language-model-only \
+    --max-model-len {max_model_len} \
+    --max-num-batched-tokens {max_num_batched_tokens} \
+    --max-num-seqs {max_num_seqs} \
+    --gpu-memory-utilization {gpu_memory_utilization} \
+    --dtype auto \
+    --kv-cache-dtype auto \
+    --load-format fastsafetensors \
+    --attention-backend flash_attn \
+    --enable-prefix-caching \
+    --enable-chunked-prefill \
+    --trust-remote-code \
+    --quantization compressed-tensors \
+    --reasoning-parser qwen3 \
+    --enable-auto-tool-choice \
+    --tool-call-parser qwen3_coder \
+    --optimization-level 3 \
+    --performance-mode throughput \
+    --default-chat-template-kwargs '{{"preserve_thinking":true}}' \
+    --speculative-config '{{"method":"dflash","model":"z-lab/Qwen3.6-35B-A3B-DFlash","num_speculative_tokens":{num_speculative_tokens}}}' \
+    --override-generation-config '{{"temperature":0.5,"top_p":0.95,"top_k":20,"min_p":0.0,"presence_penalty":0.0,"repetition_penalty":1.0}}'
+solo_only: false
+mods:
+  - mods/fix-qwen3.5-autoround
+  - mods/fix-qwen3-coder-next
+description: RedHatAI/Qwen3.6-35B-A3B-NVFP4
+model: RedHatAI/Qwen3.6-35B-A3B-NVFP4
+container: vllm-node-tf5

@@ -1,5 +1,7 @@
 # NVFP4 on DGX Spark: Memory Footprint Investigation
 
+> **⚠️ UPDATED 2026-06-05 — facts below are partly superseded.** This snapshot dates to **March 26 2026**, the week the sm_121 NVFP4 fixes landed. Since then: stock upstream **vLLM ≥ v0.19.0 (now v0.22.x) builds working sm_121 NVFP4 kernels — no eugr fork needed**; a **native SM120/121 CUTLASS NVFP4 GEMM** landed (vLLM PR #40082, merged 2026-05-20); the `VLLM_NVFP4_GEMM_BACKEND` / `VLLM_USE_FLASHINFER_MOE_FP4` env vars are **deprecated** (still functional, emit FutureWarning; replaced by `--linear-backend` / `--moe-backend`) and backend choice is now **per-model** — in current top recipes text Nemotron NVFP4 enables FlashInfer MoE while multimodal Omni still pins Marlin; **llama.cpp NVFP4 is now GPU-accelerated**. The memory-tuning findings (KV pre-allocation, `--enforce-eager`, util 0.2) still hold. Wrong/dangerous facts are corrected in place below; full diff in [`NVFP4_UPDATE_PLAN.md`](../NVFP4_UPDATE_PLAN.md). Current host baseline: **Driver 580.159.03 · CUDA 13.0.2** (DGX OS 7.5.0).
+
 **Snapshot:** March 26, 2026 · CUDA 13.0 · Driver 580.142 · vLLM 0.18.1rc1 · FlashInfer 0.6.7
 **Hardware:** DGX Spark (GB10, sm_121, 128 GB unified memory)
 **Model:** `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4` (19 GB on disk)
@@ -78,9 +80,10 @@ SM121 (GB10) lacks `tcgen05` — the 5th-gen tensor core instructions that SM100
 Tracked issues (as of March 26, 2026):
 - CUTLASS #2947, #2800, #2802 — FP4 kernels hard-restricted to `sm_100a/sm_103a`
 - CUTLASS #3038 — SM121-gated MXFP4 kernel wiring for MoE (in review)
-- vLLM #35947 — software E2M1 conversion for SM12x NVFP4 activation (merged)
+- vLLM #37725 — preserve CUDA arch suffix for SM12x, fixes NVFP4 NaN (merged 2026-03-25; supersedes #35947, which was **closed unmerged**)
+- vLLM #40082 — native SM120/121 CUTLASS NVFP4 GEMM + opt-in b12x kernel (merged 2026-05-20)
 - vLLM #38126 — SM12x architecture suffix preservation, fixes NaN (merged)
-- Flash-Attention #2222 — SM12x support without tcgen05 (in progress)
+- Flash-Attention #2329 / #2330 / #2333 — SM120 fwd/bwd/varlen support **merged 2026-03-12/13** (Blackwell GeForce / DGX Spark); draft #2222 closed unmerged
 
 No public NVIDIA timeline for native SM121 `tcgen05` FP4 support.
 
@@ -88,7 +91,7 @@ No public NVIDIA timeline for native SM121 `tcgen05` FP4 support.
 
 - `gpu-memory-utilization` below 0.2 failed: model + runtime exceeds the budget. `--kv-cache-memory-bytes` may bypass this but we haven't fully validated.
 - Direct transformers + TorchAO path blocked: `KeyError: 'weight_scale'` on ModelOpt checkpoints (huggingface/transformers#44292).
-- GGUF conversion exists but is CPU-only: llama.cpp PR #19769 merged March 2026; no GPU backend for NVFP4-derived GGUF.
+- GGUF conversion exists; **UPDATE June 2026: llama.cpp now runs NVFP4 GGUF on GPU** (CUDA dp4a + native Blackwell FP4 covering sm_120/121, PRs #20644/#22196; also SYCL/Vulkan). The "CPU-only" limitation (PR #19769) was snapshot-era. Still a requantize, not a transcode.
 - SGLang stable crashed on sm_121. Nightly builds (`lmsysorg/sglang:nightly-dev-cu13-*`) with `--attention-backend triton` ran.
 - TensorRT-LLM: same class of multi-tenant engine as vLLM; forum-reported ~90 GB for Llama-3.3-70B-NVFP4 on Spark.
 

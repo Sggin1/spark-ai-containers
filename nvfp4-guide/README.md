@@ -1,5 +1,7 @@
 # Nemotron-3-Nano-30B NVFP4 on DGX Spark: From 120 GB to 32 GB — A Guide (Early Results)
 
+> **⚠️ UPDATED 2026-06-05 — facts below are partly superseded.** This guide dates to **March 26 2026**, the week the sm_121 NVFP4 fixes landed. Since then: stock upstream **vLLM ≥ v0.19.0 (now v0.22.x) builds working sm_121 NVFP4 kernels — no eugr fork needed**; a **native SM120/121 CUTLASS NVFP4 GEMM** landed (vLLM PR #40082, merged 2026-05-20); the `VLLM_NVFP4_GEMM_BACKEND` / `VLLM_USE_FLASHINFER_MOE_FP4` env vars are **deprecated** (still functional, emit FutureWarning; replaced by `--linear-backend` / `--moe-backend`) and backend choice is now **per-model** — in current top recipes text Nemotron NVFP4 enables FlashInfer MoE while multimodal Omni still pins Marlin; **llama.cpp NVFP4 is now GPU-accelerated**. The memory-tuning findings (KV pre-allocation, `--enforce-eager`, util 0.2) still hold. Wrong/dangerous facts are corrected in place below; full diff in [`NVFP4_UPDATE_PLAN.md`](../NVFP4_UPDATE_PLAN.md). Current host baseline: **Driver 580.159.03 · CUDA 13.0.2** (DGX OS 7.5.0).
+
 **TL;DR:** We got a 19 GB NVFP4 model running in **32 GB total memory at 50 tok/s** on DGX Spark, down from the 50-120 GB that vLLM typically uses. The key: **Marlin backend + enforce_eager + gpu_memory_utilization 0.2**.
 
 ---
@@ -152,7 +154,8 @@ All tests on DGX Spark (GB10, sm_121), Nemotron-3-Nano-30B-A3B-NVFP4 (19 GB mode
 As of March 2026, **NVFP4 is not natively accelerated on SM121**. The Marlin backend works by dequantizing FP4→BF16 on the fly, which is functional but not using native FP4 tensor cores. Active PRs:
 
 - CUTLASS #3038: SM121-gated MXFP4 kernel wiring
-- vLLM #35947: Software E2M1 conversion for SM12x
+- vLLM #37725: CUDA arch-suffix preservation for SM12x (merged 2026-03-25; supersedes #35947, which was closed unmerged)
+- vLLM #40082: native SM120/121 CUTLASS NVFP4 GEMM (merged 2026-05-20)
 - vLLM #38126: Architecture suffix preservation
 
 Community thread with 3400+ views: [PSA: State of FP4/NVFP4 Support for DGX Spark in VLLM](https://forums.developer.nvidia.com/t/psa-state-of-fp4-nvfp4-support-for-dgx-spark-in-vllm/353069)
@@ -194,7 +197,7 @@ Supporting research, benchmark scripts, and raw test outputs are in the local pr
 - **System freeze observed.** A brief web UI freeze occurred during high-memory testing with `fastsafetensors` at elevated `gpu_memory_utilization`. DGX Spark's unified memory means GPU over-allocation directly starves the OS. No permanent damage, but reinforces the need for memory safeguards.
 - **Single-user only.** All benchmarks are single-user (`--max-num-seqs 1`). Multi-user serving would need higher `gpu_memory_utilization` and different KV cache sizing — not tested.
 - **SGLang not tested.** The SGLang configuration is from NVIDIA's cookbook, not verified on our hardware.
-- **SM121 native FP4 still pending.** The Marlin backend works via FP4→BF16 dequantization, not native tensor cores. PRs are open (CUTLASS #3038, vLLM #35947, #38126) but none merged as of this writing.
+- **SM121 native FP4 — UPDATE June 2026: landed.** vLLM #37725 and #38126 merged (late March 2026), and a native SM120/121 CUTLASS NVFP4 GEMM shipped in #40082 (merged 2026-05-20); the warp-level b12x FP4 path is opt-in. CUTLASS #3038 (SM121 MXFP4 MoE wiring) remains open. Marlin's FP4→BF16 dequant is still the *default* single-stream (bs=1) path, but it is no longer the only option.
 - **Comparison context.** Ollama achieves similar throughput (49 tok/s) at lower memory (26 GB). The vLLM path trades slightly higher memory for OpenAI-compatible API, longer context support, and extensibility (e.g., TurboQuant KV cache — see [turboquant](../turboquant/)).
 
 ## Acknowledgments

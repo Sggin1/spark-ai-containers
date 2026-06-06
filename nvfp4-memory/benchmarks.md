@@ -1,5 +1,7 @@
 # Nemotron-3-Nano-30B-A3B-NVFP4 — DGX Spark SM_121 Benchmarks
 
+> **⚠️ UPDATED 2026-06-05 — March 2026 measurements, retained as history.** The ~49–50 tok/s NVFP4 figures here are the Marlin-dequant floor; community single-stream is now ~57–67 tok/s mainstream (up to ~74 tok/s tuned). Software baseline has moved (Driver 580.159.03 / CUDA 13.0.2; current NGC vLLM 26.02+, official upstream cu130 image recommended). Full diff in [`NVFP4_UPDATE_PLAN.md`](../NVFP4_UPDATE_PLAN.md).
+
 ## System Configuration
 
 | Component | Value |
