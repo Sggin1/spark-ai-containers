@@ -96,6 +96,8 @@ Two real pip-shadowing risks observed while running ComfyUI on Spark with the [T
 
 This is work on a single hardware configuration mostly. Results may not generalize to other setups. The TurboQuant container patches an unmerged vLLM PR — the API may change. Sharing what worked in case it helps others with similar hardware.
 
+Related: [llm-latent-bridge-negative-results](https://github.com/Sggin1/llm-latent-bridge-negative-results) — negative results on bridging LLM hidden states at shallow layers, measured on this hardware.
+
 ## Acknowledgments
 
 - [eugr/spark-vllm-docker](https://github.com/eugr/spark-vllm-docker) — Community vLLM container with prebuilt SM121 wheels
