@@ -1,6 +1,6 @@
 # NVFP4 on DGX Spark
 
-**Folder status:** combined 2026-08-06 from `nvfp4-guide/`, `nvfp4-landscape/`, and `nvfp4-memory/`.  
+**Folder status:** sole top-level `nv*` topic in this repo. Combined 2026-08-06 from `nvfp4-guide/`, `nvfp4-landscape/`, and `nvfp4-memory/`; root stubs for those paths removed 2026-08-06.  
 **Primary snapshot (friction era):** 2026-03-25 → 2026-03-26  
 **Last narrative update:** 2026-08-06 (this README)  
 **Host baseline noted June 2026:** Driver **580.159.03** · CUDA **13.0.2** · DGX OS 7.5.0  
@@ -141,9 +141,8 @@ nvfp4/
     research-status-2026-03-25.md
 ```
 
-Redirect stubs (old paths → here): `../nvfp4-guide/`, `../nvfp4-landscape/`, `../nvfp4-memory/`.
-
-**Removed on combine:** `nvfp4-memory/earlier_forum_post_draft.md` (near-duplicate of the guide).
+**Removed on combine:** `nvfp4-memory/earlier_forum_post_draft.md` (near-duplicate of the guide).  
+**Removed later:** root redirect stubs `nvfp4-guide/`, `nvfp4-landscape/`, `nvfp4-memory/` — use this folder only.
 
 ---
 

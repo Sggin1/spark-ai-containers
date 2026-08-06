@@ -8,11 +8,11 @@ Entries address compatibility issues with CUDA 13.x, aarch64, and SM121 that are
 
 ### 1. [nvfp4/](nvfp4/) — NVFP4 on DGX Spark (friction → working)
 
-Single home for the NVFP4 story on GB10: March 2026 memory-floor campaign (19 GB model, 50–120 GB → ~32 GB @ ~50 tok/s), then the **software + driver/OS catch-up** that made stock upstream viable. Combines the old `nvfp4-guide/`, `nvfp4-landscape/`, and `nvfp4-memory/` trees (stubs remain at those paths).
+Single top-level home for the NVFP4 story on GB10 (only `nv*` topic folder). March 2026 memory-floor campaign (19 GB model, 50–120 GB → ~32 GB @ ~50 tok/s), then the **software + driver/OS catch-up** that made stock upstream viable. Former trees `nvfp4-guide/`, `nvfp4-landscape/`, `nvfp4-memory/` live under this folder (`guide.md`, `memory.md`, `archive/`).
 
 - Current narrative + what still holds: [`nvfp4/README.md`](nvfp4/README.md)
 - Living launch YAMLs: [`recipes/`](recipes/) (not re-copied here)
-- Silicon deep dive: [`fp4_SASS/`](fp4_SASS/)
+- Silicon deep dive: [`fp4_SASS/`](fp4_SASS/) (related FP4 silicon notes; separate topic)
 - Dated lab notes under [`nvfp4/archive/`](nvfp4/archive/) (March 2026 stamps)
 
 ### 2. [turboquant/](turboquant/) — TurboQuant 3-bit KV Cache Compression
