@@ -15,30 +15,36 @@ out of scope here; see
 
 ---
 
-## Zero — Power (read this before anything else)
+## Zero — Power (check this before chasing network bugs)
 
-**Don't plug a DGX Spark into a consumer UPS.** Spark spikes to 300 W+ under
-inference load. Undersized or degraded UPSes sag under the transient and the
-Spark's governor clamps the GPU into P8 (deepest idle state) *even under
-load*. Every benchmark will plateau at ~1/3 of spec regardless of quant,
-container, or vLLM flags, and you will waste hours chasing phantom
-"kernel fallback" bugs (we did).
+DGX Spark can spike past **300 W** on inference transients. If the AC path
+sags (undersized UPS, overloaded circuit, weak strip), the governor can
+clamp the GPU into **P8 while under load**. Benchmarks then plateau at
+~1/3 of spec with no clear log line — we burned hours on that.
 
-**Run direct on wall outlet. Verify before bench:**
+**This is not “all UPS bad.”** Many people run fine on UPS. What we
+verified is one failure mode on one path:
+
+| AC source (same box, same code) | Burst / sustained (bf16 GEMM) |
+|---|---|
+| One consumer UPS under transient load | 8.9 / 46.9 TFLOP/s |
+| Direct wall outlet | 82 / 120 TFLOP/s |
+
+**Oracle — run before any networking work:**
 
 ```bash
-# Quick sanity — bf16 matmul TFLOP/s. Healthy GB10 = 80-125 burst, 80-140 sustained.
+# Healthy GB10 ≈ 80–125 burst, 80–140 sustained. < ~60 either number → fix power path first.
 docker run --rm --gpus all --ipc=host \
   -v $PWD/gpu_stress.py:/work/gpu_stress.py \
   vllm-node-tf5 python3 -u /work/gpu_stress.py
 ```
 
-Throttled (UPS) head node: 8.9 / 46.9 TFLOP/s. Same machine on wall: 82 / 120.
-Zero code change.
+If numbers are healthy on your UPS (or PDU / strip), keep it. If not: try
+wall (or a higher-capacity source), re-run, then resume setup.
 
 Ignore `dmesg | grep "insufficient power"` — on Spark those mlx5 PCIe
-warnings fire at boot even on healthy power (chassis quirk). Use the
-TFLOP/s number as the real oracle.
+warnings fire at boot even on healthy power (chassis quirk). Trust the
+TFLOP/s number, not that line.
 
 ---
 
@@ -46,8 +52,8 @@ TFLOP/s number as the real oracle.
 
 | # | Symptom | Fix |
 |---|---|---|
-| 0 | Inference plateaus at ~1/3 spec regardless of config | **Wall outlet, not UPS.** See §0 |
-| 1 | Launcher SSHs as wrong user → `Permission denied (publickey)` | Match usernames at install, or `~/.ssh/config` `Host` block (§2.4) |
+| 0 | Inference plateaus at ~1/3 spec regardless of config | Power sag / P8 under load — verify AC with `gpu_stress.py` (§0) |
+| 1 | Launcher SSHs as wrong user → `Permission denied (publickey)` | Prefer one shared user (§1.1 A); or two-user `~/.ssh/config` map (§2.4) |
 | 2 | Ray never connects, `nc -zv 10.10.0.1 29501` hangs | UFW open 10.10.0.0/24 + 10.10.1.0/24 on both (§2.2) |
 | 3 | Only ~100 Gb/s total; half the fabric idle | Twins on **different** /24 subnets (§2.1) |
 | 4 | `ibv_modify_qp failed 101 Network is unreachable` | `NCCL_IB_GID_INDEX=3` (RoCEv2 + IPv4-mapped) (§4.4) |
@@ -59,28 +65,112 @@ TFLOP/s number as the real oracle.
 
 ## 1. Two decisions to make before anything else
 
-### 1.1 Same username on both machines
+### 1.1 Username model: one user (A, recommended) or two (B, works)
 
-Pick one name — `ak`, `spark`, your initials, whatever — and create the same
-user on both boxes at install time. Different usernames per box (e.g. `<user1>`
-on one and `<user2>` on the other) break eugr's launcher, sparkrun, and the
-NVIDIA playbook, all of which SSH as the current user to the peer IP. You
-can work around it (§2.4) but fixing it at install is cleaner.
+Launchers (eugr's `spark-vllm-docker`, sparkrun, NVIDIA playbooks) SSH to
+the peer **as the current username**. Two workable models:
 
-Use the same UID too — file ownership travels by number, not name:
+| Model | What it looks like | Headwind | Playbook |
+|---|---|---|---|
+| **A · same user on both** (recommended) | both nodes log in as `<user>` (same UID) | Lowest | §1.1.1 + §2.3 A |
+| **B · different user per box** | `<user_a>` head, `<user_b>` worker | SSH map on every fabric IP | §1.1.2 + §2.3 B + §2.4 |
+| **B → A** (convert later) | were two users; now one shared | One-time migration | §1.1.3 |
+
+**We ran B first, then converted to A.** B is fine while experimenting; A
+is less day-to-day friction. Prefer A at install if you can. Both are
+documented end-to-end below — there is no “unsupported” path, only more
+or less headwind.
+
+File ownership travels by **UID**, not name — matching UIDs keeps rsynced
+trees and shared paths sane even before names match.
+
+#### 1.1.1 Playbook A — same user from day one
 
 ```bash
-sudo useradd -u 1001 -m -G sudo,docker ak   # run on BOTH, same UID
+# pick one name + one UID; run on BOTH nodes
+sudo useradd -u 1001 -m -G sudo,docker <user>
+# set password / SSH keys as you normally would, then:
 ```
 
-If you already installed with mismatched names and it works, leave it. But
-fix before adding a third Spark.
+| Step | Where | Action |
+|---|---|---|
+| 1 | both | same `<user>` + same UID in `sudo,docker` |
+| 2 | head | §2.3 model A — `ssh-copy-id <user>@10.10.0.2` and `…@10.10.1.2` |
+| 3 | — | **skip §2.4** entirely |
+| 4 | both | `/mnt/ai` symlink (§2.6) — still recommended |
+| 5 | head | `ssh 10.10.0.2 whoami` → prints `<user>` (same as local) |
+
+#### 1.1.2 Playbook B — two users (works)
+
+Keep the stock accounts if you already created different names at install.
+
+| Step | Where | Action |
+|---|---|---|
+| 1 | both | leave `<user_a>` / `<user_b>` as-is; put both in `docker` (+ `sudo` if needed) |
+| 2 | head | §2.3 model B — `ssh-copy-id <user_b>@10.10.0.2` (and twin-2 IP) |
+| 3 | head (+ worker if tools SSH back) | §2.4 `Host` blocks mapping fabric IPs → peer username |
+| 4 | both | **do** §2.6 `/mnt/ai` — bind mounts must not depend on `$HOME` |
+| 5 | head | `ssh 10.10.0.2 whoami` → prints `<user_b>`, no password |
+
+Day-to-day cost: any new hostname/IP you SSH to needs a `Host` line, or
+launchers break with `Permission denied (publickey)`.
+
+#### 1.1.3 Playbook B → A — convert to one user
+
+When the SSH map gets old, pick one shared name (often the head’s account
+name, or a fresh `<user>`) and the same UID on both boxes.
+
+```bash
+# --- on BOTH nodes (adjust names/UID to your choice) ---
+# If <user> does not exist yet on this box:
+sudo useradd -u 1001 -m -G sudo,docker <user>
+# If it exists but UID differs, prefer creating a clean shared UID rather
+# than renumbering a busy account mid-flight.
+
+# ensure docker group
+sudo usermod -aG docker <user>
+
+# --- data: prefer the fixed path you already use ---
+# If you have /mnt/ai → real tree, keep it; chown to the shared UID:
+sudo chown -R <user>:<user> /mnt/ai   # only if that tree should belong to <user>
+
+# optional: copy old home bits you still need
+# sudo rsync -aHAX /home/<user_a>/projects/ /home/<user>/projects/
+```
+
+```bash
+# --- SSH as the shared user (from head, logged in as <user>) ---
+ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519   # skip if key exists
+ssh-copy-id <user>@10.10.0.2
+ssh-copy-id <user>@10.10.1.2
+ssh <user>@10.10.0.2 true && echo OK
+```
+
+```bash
+# --- remove model-B Host overrides on head (and worker if any) ---
+# Edit ~/.ssh/config: delete User <user_b> / User <user_a> blocks for
+# 10.10.0.1, 10.10.0.2, 10.10.1.1, 10.10.1.2 (or comment them out).
+# After that, plain SSH must use the default local username on both sides.
+```
+
+| Verify | Expect |
+|---|---|
+| `whoami` on both (interactive login as shared user) | same string |
+| `id -u` on both | same number |
+| `ssh 10.10.0.2 whoami` from head | same `<user>`, no prompt |
+| `ssh 10.10.1.2 whoami` from head | same |
+| launcher / `launch-cluster.sh` SSH steps | no `Permission denied (publickey)` |
+
+You can leave the old account on disk; just stop using it for cluster
+ops. Old `Host` lines that force `User <user_b>` will fight model A —
+remove them.
 
 ### 1.2 Each twin on its own /24 subnet
 
-The single CX-7 cable carries traffic on **two logical PCIe x4 partitions**
-("twins"), each about 100 Gb/s. To use both, each twin must have an IP on a
-**different** /24.
+The single CX-7 cable is **one ~200 Gb/s fabric** split across two PCIe
+slots / “twins” (~half each useful). Picture + PCI map:
+[`TOPOLOGY.md`](./TOPOLOGY.md). To use both halves, each twin needs an IP
+on a **different** /24.
 
 ```
         GX_NODE_1 (head)              GX_NODE_2 (worker)
@@ -101,10 +191,10 @@ Ray **head** role (cluster master, model launcher, registry host).
 `GX_NODE_2` plays the **worker** role. Where the text says "on head:" or
 "on worker:" later, that refers to the role, not the hostname:
 
-- **GX_NODE_1 (head role):** hostname `GX_NODE_1`, user `<user>`, twins `10.10.0.1`, `10.10.1.1`
-- **GX_NODE_2 (worker role):** hostname `GX_NODE_2`, user `<user>`, twins `10.10.0.2`, `10.10.1.2`
-
-If your usernames differ between nodes, see §2.4.
+- **GX_NODE_1 (head role):** hostname `GX_NODE_1`, twins `10.10.0.1`, `10.10.1.1`
+- **GX_NODE_2 (worker role):** hostname `GX_NODE_2`, twins `10.10.0.2`, `10.10.1.2`
+- **User:** model A → same `<user>` on both; model B → `<user_a>` head /
+  `<user_b>` worker + §2.4
 
 ---
 
@@ -158,6 +248,8 @@ nc -zv 10.10.0.1 29501      # must succeed, not hang
 
 ### 2.3 Passwordless SSH over the fabric (head node)
 
+**Model A** (same `<user>` both sides):
+
 ```bash
 ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519    # skip if key exists
 ssh-copy-id <user>@10.10.0.2
@@ -165,25 +257,52 @@ ssh-copy-id <user>@10.10.1.2
 ssh <user>@10.10.0.2 true && echo OK                # must be non-interactive
 ```
 
+**Model B** (different user on worker): use the *worker* username on
+`ssh-copy-id`, then continue to §2.4 so plain `ssh 10.10.0.2` still works
+without embedding the foreign name:
+
+```bash
+ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519
+ssh-copy-id <user_b>@10.10.0.2
+ssh-copy-id <user_b>@10.10.1.2
+```
+
 Accept host keys for **both** fabric IPs (each is a separate SSH host).
 
-### 2.4 Mismatched usernames: `~/.ssh/config`
+### 2.4 Two-user model: `~/.ssh/config` map
 
-**Skip if usernames match on both nodes.** Otherwise, on the head node:
+**Skip this entire section for model A** (same username both nodes).
+
+For model B, launchers and scripts often SSH as *your* local username to
+the peer IP. Map every fabric address the head might touch to the
+worker's real account — on the **head** node:
 
 ```sshconfig
 Host 10.10.0.2
     HostName 10.10.0.2
-    User <worker-username>
+    User <user_b>
     IdentityFile ~/.ssh/id_ed25519
 
 Host 10.10.1.2
     HostName 10.10.1.2
-    User <worker-username>
+    User <user_b>
     IdentityFile ~/.ssh/id_ed25519
 ```
 
-Verify: `ssh 10.10.0.2 whoami` → prints the peer's username, not yours.
+If the worker also SSHs back to the head (some tools do), mirror the
+map there with `User <user_a>` on `10.10.0.1` / `10.10.1.1`.
+
+Verify from head:
+
+```bash
+ssh 10.10.0.2 whoami    # must print <user_b>, no password prompt
+ssh 10.10.1.2 whoami    # same
+```
+
+**Still more headwind than model A:** any new script that SSHes by a
+hostname you forgot to list, or rsyncs into the wrong `$HOME`, will
+bite. `/mnt/ai` (§2.6) and same-UID shared data help. When you are ready
+to drop the map, use the **B → A** conversion playbook in §1.1.3.
 
 ### 2.5 Local docker registry on the fabric IP (recommended)
 
@@ -217,7 +336,8 @@ Then `sudo systemctl restart docker` on both.
 ### 2.6 Shared AI asset path
 
 Docker `-v` bind mounts send the host path from head to worker. If paths
-differ (`$HOME/ai` resolves differently per user), mounts break silently.
+differ (`$HOME/ai` resolves differently per user — common under model B),
+mounts break silently. Model A still benefits from a fixed symlink.
 
 **On both:**
 
@@ -377,10 +497,15 @@ docker run --rm --gpus all --ipc=host \
 
 ### 4.1 Different usernames: `Permission denied (publickey)`
 
-Launcher SSHes as the current user to the peer IP.
+Launcher SSHes as the *local* username to the peer IP. Model B without a
+complete `~/.ssh/config` map fails here; model A never hits it.
 
-**Fix:** `~/.ssh/config` host blocks per §2.4. Verify
-`ssh 10.10.0.2 whoami` → peer's username.
+**Fix (stay on two users):** `Host` blocks per §2.4 for **both** fabric
+IPs (and reverse map on worker if needed). Verify
+`ssh 10.10.0.2 whoami` → worker account, no prompt.
+
+**Fix (less headwind long-term):** convert B → A per §1.1.3 — shared
+username + UID, redo `ssh-copy-id`, remove the Host overrides.
 
 ### 4.2 UFW blocks the fabric: Ray GCS timeout
 
@@ -458,7 +583,7 @@ on both before a first TP=2 run:
 
 | Property | Check | Why |
 |---|---|---|
-| Username | `whoami` | Launcher SSHes as current user |
+| Username | `whoami` (same both sides, or §2.4 map) | Launcher SSHes as current user |
 | Docker group | `groups \| grep docker` | Launcher needs `docker exec` without sudo |
 | Docker daemon | `systemctl is-active docker` | Corrupt buildkit cache is a known silent failure (rm `/var/lib/docker/buildkit` + restart) |
 | DGX OS | `cat /etc/dgx-release` | Minor skew OK; if troubleshooting collective hangs, OTA-update the older one |

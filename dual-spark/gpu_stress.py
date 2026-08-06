@@ -2,8 +2,8 @@
 """
 GB10 BF16 GEMM TFLOP/s sanity oracle (DUAL_SPARK_SETUP §0).
 
-Healthy GB10 on wall outlet: ~80-125 TFLOP/s burst, ~80-140 sustained.
-Throttled GB10 (UPS / undervolted): ~8 burst, ~45 sustained.
+Healthy GB10: ~80-125 TFLOP/s burst, ~80-140 sustained.
+Throttled GB10 (AC sag / undervolt — e.g. undersized UPS): ~8 burst, ~45 sustained.
 
 Run inside a CUDA-equipped container:
 
@@ -63,7 +63,7 @@ print(f"sustained[{iters} iters / {t_total:.1f}s]: {sustained_tflops:7.2f} TFLOP
 print()
 
 if burst_tflops < 60 or sustained_tflops < 60:
-    print("VERDICT: UNHEALTHY (likely UPS/undervolt — see DUAL_SPARK_SETUP §0)")
+    print("VERDICT: UNHEALTHY (likely AC sag / undervolt — see DUAL_SPARK_SETUP §0)")
     raise SystemExit(2)
 elif burst_tflops < 80 or sustained_tflops < 80:
     print("VERDICT: MARGINAL (below the documented healthy floor)")

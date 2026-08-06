@@ -55,10 +55,11 @@ Native sm_121 llama.cpp build for Nemotron-3-Super 120B MoE. GGUF path documente
 
 ### 7. [dual-spark/](dual-spark/) — Pairing two GX10 over a single CX-7 cable (200 Gb/s RDMA)
 
-Field-tested runbook for pairing two NVIDIA DGX Sparks (ASUS Ascent GX10) over a single CX-7 direct-link cable. Addresses the two failure classes that consume the most forum hours: power-induced throttling (consumer UPS sag → P8 clamp → 1/3-spec plateau) and dual-node connection issues (UFW, NCCL TCP-fallback, GID-index, half-bandwidth twin misconfig). Includes a BF16 GEMM TFLOP/s sanity oracle (`gpu_stress.py`) for triage.
+Field-tested runbook for pairing two NVIDIA DGX Sparks (ASUS Ascent GX10) over a single CX-7 direct-link cable. Covers the two failure classes that burn the most forum hours: power-path throttling (measure with `gpu_stress.py` — AC sag can clamp P8 under load; not all UPS bad) and dual-node connection issues (UFW, NCCL TCP-fallback, GID-index, half-bandwidth twin misconfig). Username models A (same user), B (two users + SSH map), and B→A conversion are documented.
 
-- 7-row symptom → fix table at the top of `DUAL_SPARK_SETUP.md`
-- Verified: ~195–197 Gb/s RDMA aggregate (97-98% of theoretical 200 Gb/s)
+- Symptom → fix table at the top of [`dual-spark/DUAL_SPARK_SETUP.md`](dual-spark/DUAL_SPARK_SETUP.md)
+- Visual cable / twin / PCI map: [`dual-spark/TOPOLOGY.md`](dual-spark/TOPOLOGY.md) (one cable ≈ 200 Gb/s total)
+- Verified: ~195–197 Gb/s RDMA aggregate (full single-cable budget)
 - Patches eugr's launcher with NCCL multi-rail + RoCEv2 GID overrides
 
 ### 8. [atlas/](atlas/) — Atlas Inference Engine: head-to-head vs vLLM

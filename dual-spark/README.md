@@ -4,11 +4,11 @@ A field-tested runbook for pairing two NVIDIA DGX Sparks (ASUS Ascent GX10 /
 GB10 / SM121) over a single CX-7 direct-link cable, and for diagnosing the
 two failure classes that consume the most forum hours:
 
-1. **Power-induced throttling** — Sparks plugged into consumer UPSes sag
-   under inference transients and clamp the GPU into P8 (deepest idle)
-   *while under load*. Every benchmark plateaus at ~1/3 of spec, regardless
-   of quant, container, or vLLM flags. There is no log line that tells you
-   this directly. We chased it for hours.
+1. **Power-induced throttling** — if the AC path sags under inference
+   transients (we hit this on an undersized consumer UPS), the GPU can
+   clamp into P8 *while under load*. Benchmarks plateau at ~1/3 of spec
+   with no clear log line. Many UPS setups are fine — **measure first**
+   with `gpu_stress.py` (§0).
 2. **"Can't connect 2 boxes"** — Ray timeouts, NCCL falling back to TCP
    over the management interface, `Permission denied (publickey)` from
    launchers, half-bandwidth from a misconfigured second twin. All
@@ -16,7 +16,8 @@ two failure classes that consume the most forum hours:
 
 If you're a forum reader who landed here from a Spark-pair thread, jump
 straight to [`DUAL_SPARK_SETUP.md`](./DUAL_SPARK_SETUP.md). The TL;DR table
-near the top maps symptoms to sections.
+near the top maps symptoms to sections. For cable / twin / PCI pictures,
+see [`TOPOLOGY.md`](./TOPOLOGY.md).
 
 ---
 
@@ -40,8 +41,9 @@ wrong shape — see the
 
 | File | Purpose |
 |---|---|
-| [`DUAL_SPARK_SETUP.md`](./DUAL_SPARK_SETUP.md) | The full runbook. Power, networking, SSH, UFW, NCCL, validation, troubleshooting. Paste-ready. |
-| [`gpu_stress.py`](./gpu_stress.py) | bf16 GEMM oracle. Run it before bench. Healthy = 80–125 burst / 80–140 sustained TFLOP/s. Throttled (UPS) = ~8 / ~45. Same machine, same code, no other variables. |
+| [`DUAL_SPARK_SETUP.md`](./DUAL_SPARK_SETUP.md) | Full runbook. Power, usernames (A / B / B→A), networking, SSH, UFW, NCCL, validation, troubleshooting. Paste-ready. |
+| [`TOPOLOGY.md`](./TOPOLOGY.md) | Visual map: one cable ~200 Gb/s total, two twins / PCIe slots, PCI domains, bandwidth. Mermaid + ASCII. |
+| [`gpu_stress.py`](./gpu_stress.py) | bf16 GEMM oracle. Run it before bench. Healthy ≈ 80–125 burst / 80–140 sustained TFLOP/s. Throttled (AC sag) ≈ ~8 / ~45. |
 | `LICENSE` | MIT |
 | `.gitignore` | Standard Python + transient artifacts |
 
@@ -52,15 +54,20 @@ wrong shape — see the
 - Two DGX Sparks (or compatible GB10 / SM121 boxes), already booted to DGX
   OS, on the same physical bench
 - One ConnectX-7 direct-link cable between them (single-cable, dual-twin
-  topology — the SKU that ships with two Sparks)
+  topology — the SKU that ships with two Sparks; **one cable carries the
+  whole ~200 Gb/s fabric** — see [`TOPOLOGY.md`](./TOPOLOGY.md))
 - Root / sudo on both
-- Wall outlets that can sustain 300 W+ transients per box. **Not a UPS.**
-  See §0 of the runbook for why.
+- AC that can hold **300 W+** transients per box. Wall is the known-good
+  check if `gpu_stress.py` looks sick; a solid UPS is fine if numbers are
+  healthy. See §0 of the runbook.
 
 Soft requirements (the runbook assumes these but they're not strict):
 
-- Same username and UID on both nodes (the runbook covers the workaround
-  if you can't change this)
+- **Username model** (both supported):
+  - **A** — same user + UID on both nodes (recommended, least headwind)
+  - **B** — different user per box + `~/.ssh/config` map
+  - **B → A** — conversion playbook if you started with two users  
+  Details: runbook §1.1 / §2.3 / §2.4
 - Docker + NVIDIA Container Toolkit, recent driver
 - `nmcli`, `ufw`, `perftest` (`apt install perftest`)
 
@@ -73,11 +80,11 @@ Soft requirements (the runbook assumes these but they're not strict):
 docker run --rm --gpus all --ipc=host \
   -v $PWD/gpu_stress.py:/work/gpu_stress.py \
   vllm-node-tf5 python3 -u /work/gpu_stress.py
-# < 60 TFLOP/s burst or sustained? Stop. Move to wall outlet. Re-run.
+# < 60 TFLOP/s burst or sustained? Fix AC path (try wall / better source). Re-run.
 
 # 2. Then walk DUAL_SPARK_SETUP.md top-to-bottom on a fresh pair, or
 #    jump to the TL;DR table and follow the section that matches your
-#    symptom.
+#    symptom. Skim TOPOLOGY.md if twins / half-bandwidth are confusing.
 ```
 
 If `gpu_stress.py` reports HEALTHY but the cluster still won't talk to
@@ -93,14 +100,18 @@ The runbook is the as-built record of a working 2-Spark TP=2 cluster.
 Specifically:
 
 - **Power**: throttled-vs-healthy TFLOP/s numbers (8.9/46.9 → 82/120) are
-  measured on the same physical box, swapping only the AC source.
+  measured on the same physical box, swapping only the AC source (one
+  consumer UPS path vs wall). Other UPS/PDU gear may be fine — send
+  datapoints.
 - **Bandwidth**: ~107 Gb/s per twin via `ib_write_bw`, ~195–197 Gb/s
-  aggregate (97–98% of 200 theoretical line rate).
+  aggregate (≈ full single-cable ~200 Gb/s budget, not 2× that).
 - **NCCL transport**: confirmed RDMA (`NET/IB`) end-to-end with the patched
   `autodiscover.sh`, no Socket fallback in container logs.
+- **User models**: both same-user (A) and two-user + SSH map (B); we used
+  B then converted to A.
 - **Models**: validated on the eugr stack with the recipes shipped in that
-  repo. The `gemma-4-26B-A4B-it` example in §6 is a placeholder — substitute
-  whatever you're actually running.
+  repo. The example in §6 is a placeholder — substitute whatever you're
+  actually running.
 - **HW**: GB10 / SM121, DGX OS, single CX-7 cable, two-twin topology.
 
 ## What's NOT verified
@@ -117,10 +128,10 @@ Specifically:
 - **OTA-driver / DGX-OS combinations beyond what we tested.** The runbook
   flags the version-skew failure mode in §5 but can't enumerate every
   matrix.
-- **Power supplies other than "direct wall outlet."** Specifically: data-
-  center PDUs, line conditioners, surge protectors, and "smart" power strips
-  are untested. The only verified-bad configuration is "consumer UPS." The
-  only verified-good configuration is "direct wall outlet, no intermediary."
+- **Every power path.** Wall is verified-good on our box; one consumer UPS
+  path was verified-bad under load. Data-center PDUs, line conditioners,
+  and other UPS models are untested here — if `gpu_stress.py` is healthy,
+  you're good.
 
 If your symptom matches §0 (1/3-spec plateau) but you're already on a wall
 outlet, please open an issue with `nvidia-smi -q -d POWER` from before and
@@ -135,9 +146,9 @@ Issues and PRs welcome, especially:
 - Additional symptom → section entries for the TL;DR table
 - Confirmation (or refutation) of the runbook on Spark variants other than
   the one we tested on
-- Power-source data points (UPS model X causes throttling, PDU model Y is
-  fine, etc.) — please include the `gpu_stress.py` before/after numbers and
-  the AC source description
+- Power-source data points (UPS model X causes throttling, model Y is fine,
+  PDU Z, etc.) — please include the `gpu_stress.py` before/after numbers
+  and the AC source description
 - Cleaner versions of the `autodiscover.sh` patch in §2.7 (ideally upstreamed
   to eugr's repo)
 
