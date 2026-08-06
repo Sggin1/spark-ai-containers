@@ -1,0 +1,29 @@
+[project]
+name = "flightrec"
+version = "0.1.0"
+description = "GB10 Tier-1 benchmark flight recorder — always-on machine-state capture + measurement protocols"
+requires-python = ">=3.12"
+dependencies = ["nvidia-ml-py>=12", "pandas>=2", "pyarrow>=15", "numpy>=1.26"]
+
+[project.optional-dependencies]
+plot = ["matplotlib>=3.8"]
+dev = ["radon", "flake8", "pytest", "black"]
+
+[project.scripts]
+flightrec = "flightrec.cli:console"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["flightrec*"]
+namespaces = true
+
+[tool.black]
+line-length = 100
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]

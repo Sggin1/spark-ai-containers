@@ -74,6 +74,14 @@ Two real pip-shadowing risks observed while running ComfyUI on Spark with the [T
 
 Spark Arena + local measured recipes (NVFP4 and related). Living “run this” counterpart to [`nvfp4/`](nvfp4/).
 
+### 10. [flightrec/](flightrec/) — GB10 benchmark flight recorder
+
+Always-on Tier-1 machine-state recorder for Spark benches: GPU power/clock/throttle/energy, CPU, and memory pressure on one timeline. Invalidates throttled runs; includes `mem_guard` (OOM / mem-pressure backstop), `smoke` / `watch` / `live` monitoring arms, adaptive-N sampling and gates.
+
+- Install: `uv pip install -e ".[dev]"` from `flightrec/`
+- Primary target: DGX Spark (GB10); useful for OOM and power-path throttle triage
+- Protocols: [`flightrec/PROTOCOLS.md`](flightrec/PROTOCOLS.md)
+
 ## Hardware
 
 | | March 2026 lab notes | June 2026 baseline (nvfp4 pass) |

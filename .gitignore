@@ -27,3 +27,10 @@ secrets/
 *.swp
 .vscode/
 .idea/
+
+# flightrec local install / run artifacts (keep examples/ under flightrec/)
+**/.venv/
+**/__pycache__/
+**/*.egg-info/
+**/results/
+!flightrec/examples/**
