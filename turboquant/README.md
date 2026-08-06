@@ -173,7 +173,7 @@ curl http://localhost:8000/v1/chat/completions \
 | `--max-model-len` | Max context. Model supports up to 262144 |
 | `VLLM_NVFP4_GEMM_BACKEND=marlin` | Bypasses broken CUTLASS FP4 kernels on SM121 |
 
-See the [NVFP4 guide](../nvfp4-guide/) for details on memory creep causes and solutions.
+See [`../nvfp4/`](../nvfp4/) (especially [`memory.md`](../nvfp4/memory.md)) for memory creep causes and solutions.
 
 ## Caveats
 

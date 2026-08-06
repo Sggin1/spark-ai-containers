@@ -1,6 +1,7 @@
 # Nemotron-3-Nano-30B-A3B-NVFP4 on DGX Spark — Research Status
 
-> **⚠️ UPDATED 2026-06-05 — retained as dated history.** Snapshot is March 25 2026. Since then stock vLLM ≥ v0.19 builds working sm_121 NVFP4 kernels (no eugr fork), a native CUTLASS NVFP4 GEMM landed (PR #40082), and llama.cpp NVFP4 is now GPU-accelerated. Host baseline is now Driver 580.159.03 / CUDA 13.0.2 / kernel 6.17.0-1021. Full diff in [`NVFP4_UPDATE_PLAN.md`](../NVFP4_UPDATE_PLAN.md).
+> **Archived research log: 2026-03-25.** Day-of status only.  
+> **Current narrative:** [`../README.md`](../README.md) · **Recipes:** [`../../recipes/`](../../recipes/).
 
 ## Date: March 25, 2026
 

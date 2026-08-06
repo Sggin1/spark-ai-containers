@@ -2,8 +2,8 @@
 
 **Captured:** 2026-06-05 from the [Spark Arena leaderboard](https://spark-arena.com/leaderboard)
 (community DGX Spark benchmark, `recipeType: spark-vllm-docker`). These are *live, benchmarked*
-launch recipes — the practical counterpart to the dated lab notes in [`../nvfp4-guide`](../nvfp4-guide/),
-[`../nvfp4-landscape`](../nvfp4-landscape/), [`../nvfp4-memory`](../nvfp4-memory/).
+launch recipes — the practical counterpart to the combined NVFP4 notes in
+[`../nvfp4/`](../nvfp4/) (friction → working narrative + dated `archive/`).
 
 **Ranking basis:** test `tg128 @ d16384`, concurrency 2, single-node decode, sorted by tokens/sec.
 The ranks below are positions in that specific view (99 entries total). Other test types /
@@ -44,11 +44,12 @@ flags, no RedHatAI checkpoint). Found via a fast restart+short-probe autotune sw
 throughput` / `-O3` were *not* levers here. (Isolated single-cell runs read ~121–123; the full 28-cell matrix
 — the submission methodology — settles ~112.5. Use the matrix number.) See [`../TUNING.md`](../TUNING.md).
 
-## Why these matter for the nvfp4-* docs
+## Why these matter for the nvfp4 docs
 
-Rank #13 is the **exact model the docs were built around**, so it's a direct before/after:
+Rank #13 is the **exact model the March lab notes were built around**, so it's a direct before/after
+(see [`../nvfp4/README.md`](../nvfp4/README.md) for the full arc):
 
-| | nvfp4-* docs (March 2026) | Rank #13 recipe (June 2026) |
+| | nvfp4 March lab (2026-03) | Rank #13 recipe (June 2026) |
 |---|---|---|
 | Container | eugr fork `vllm-node:0.18.1rc1` | **official** `vllm/vllm-openai:v0.20.0-aarch64-cu130` |
 | FlashInfer MoE FP4 | `VLLM_USE_FLASHINFER_MOE_FP4=0` (disable) | **`=1` (enable)** |

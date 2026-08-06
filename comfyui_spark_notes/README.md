@@ -119,4 +119,4 @@ Until upstream package maintainers ship aarch64 GPU wheels for `onnxruntime` (no
 
 - **Sibling: [`../fp4_SASS/`](../fp4_SASS/)** — SASS-level investigation of FP4 MMA paths on Spark. Establishes the sm_120 / sm_121 SASS equivalence cited above.
 - **Upstream: [Triplany/comfyui-dgx-spark](https://github.com/Triplany/comfyui-dgx-spark)** — the practical ComfyUI integration kit these notes are observed against.
-- **Sibling: [`../nvfp4-landscape/`](../nvfp4-landscape/)** — broader NVFP4 / FP4 kernel landscape on Spark as of March 2026.
+- **Sibling: [`../nvfp4/`](../nvfp4/)** — NVFP4 on Spark (friction → working); March landscape snapshot under [`../nvfp4/archive/`](../nvfp4/archive/).

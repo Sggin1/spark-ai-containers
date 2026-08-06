@@ -1,6 +1,7 @@
 # FlashInfer JIT Compilation Issue on DGX Spark (sm_121)
 
-> **⚠️ UPDATED 2026-06-05.** The JIT-spike analysis and persistent-cache workaround below are still valid for older NGC containers, but reliance on this workaround is reduced: the **official upstream vLLM cu130 image now ships working sm_121 NVFP4 kernels**, and NGC has advanced past the 25.12/26.01 images cited here. Full diff in [`NVFP4_UPDATE_PLAN.md`](../NVFP4_UPDATE_PLAN.md).
+> **Archived analysis: 2026-03-26.** JIT-spike + cache notes still useful for **old** NGC images.  
+> **Current narrative:** [`../README.md`](../README.md). Official cu130 vLLM reduces how often this bites.
 
 ## Problem
 
