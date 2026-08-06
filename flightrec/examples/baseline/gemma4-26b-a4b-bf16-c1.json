@@ -1,0 +1,22 @@
+{
+  "cell_key": "gemma4-26b-a4b-bf16-c1",
+  "model": "google/gemma-4-26B-A4B-it",
+  "quant": "bf16",
+  "concurrency": 1,
+  "n_valid": 7,
+  "n_total": 7,
+  "median": 5.2375,
+  "median_ci95": [
+    5.236819,
+    5.270683
+  ],
+  "cv_pct": 30.78,
+  "tok_s": 24.44,
+  "j_token": 1.316,
+  "energy_j": 168.445,
+  "achieved_gbps": null,
+  "pct_of_wall": null,
+  "bandwidth_wall_gbps": 225.7,
+  "bandwidth_wall_source": "measured (STREAM-triad a=b+s*c, best-of-40, fp32, CUDA-event timed)",
+  "sm_clock_median_mhz": 2502
+}

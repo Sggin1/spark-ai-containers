@@ -1,0 +1,11 @@
+.venv/
+results/
+__pycache__/
+*.pyc
+*.parquet
+*.png
+*.egg-info/
+.pytest_cache/
+# illustrative samples ship under examples/, not results/
+!examples/
+!examples/**

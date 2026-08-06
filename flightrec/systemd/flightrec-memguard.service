@@ -1,0 +1,15 @@
+[Unit]
+Description=flightrec mem_guard — OOM / memory-pressure backstop
+After=network.target
+
+[Service]
+Type=simple
+# Set User/Group and ExecStart to your install paths.
+User=YOUR_USER
+Group=YOUR_GROUP
+ExecStart=/path/to/venv/bin/python -m flightrec.mem_guard --kill-gb 20 --warn-used-gb 90
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
